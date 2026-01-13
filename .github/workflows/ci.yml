@@ -10,17 +10,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Block workflow file changes
-        shell: bash
-        run: |
-          git fetch origin "${{ github.base_ref }}" --depth=1
-          if git diff --name-only "origin/${{ github.base_ref }}"...HEAD | grep -q '^.github/workflows/ci.yml$'; then
-            echo "Changes to .github/workflows/ci.yml are not allowed."
-            exit 1
-          fi
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

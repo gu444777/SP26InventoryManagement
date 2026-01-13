@@ -19,7 +19,7 @@ namespace SP26InventoryManagement
         public MainWindow()
         {
             InitializeComponent();
-            aaa
+            aaaa
         }
     }
 }

@@ -1,2 +1,7 @@
 # Require review from the CI owner on workflow changes
+
 /.github/workflows/ci.yml @gu444777
+
+# Protect CODEOWNERS from unreviewed changes
+
+/.github/CODEOWNERS @gu444777

@@ -21,3 +21,6 @@ jobs:
 
       - name: Build
         run: dotnet build SP26InventoryManagement.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test SP26InventoryManagement.sln --configuration Release --no-build --verbosity normal

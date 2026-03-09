@@ -3,10 +3,37 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:SP26InventoryManagement"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Inventory Management"
+        Height="420"
+        Width="860"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel Margin="16">
+        <StackPanel DockPanel.Dock="Top"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,0,0,16">
+            <Button Content="Change Password"
+                    Command="{Binding OpenChangePasswordCommand}"
+                    MinWidth="150"
+                    Padding="10,6" />
+        </StackPanel>
 
-    </Grid>
+        <Border BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="24">
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Text="Inventory Management"
+                           FontSize="30"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,20" />
+                <TextBlock Text="{Binding FullName, StringFormat='Signed in as: {0}'}"
+                           FontSize="18"
+                           Margin="0,0,0,8" />
+                <TextBlock Text="{Binding Username, StringFormat='Username: {0}'}"
+                           FontSize="16" />
+            </StackPanel>
+        </Border>
+    </DockPanel>
 </Window>

@@ -19,10 +19,7 @@ public partial class LoginWindow : Window
 
     private void PasswordBox_OnPasswordChanged(object sender, RoutedEventArgs e)
     {
-        if (sender is PasswordBox passwordBox)
-        {
-            ViewModel.Password = passwordBox.Password;
-        }
+        ViewModel.NotifyPasswordInputChanged();
     }
 
     private void OnLoginSucceeded(LoginResult _)

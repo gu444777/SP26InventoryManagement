@@ -11,6 +11,7 @@ public partial class AdminUserManagementWindow : Window
         ViewModel = viewModel;
         DataContext = viewModel;
         Loaded += OnLoaded;
+        ViewModel.LogoutRequested += OnLogoutRequested;
     }
 
     public AdminUserManagementViewModel ViewModel { get; }
@@ -31,6 +32,14 @@ public partial class AdminUserManagementWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
             Close();
+        }
+    }
+
+    private void OnLogoutRequested()
+    {
+        if (Application.Current is App app)
+        {
+            app.NavigateToLoginAfterLogout(this);
         }
     }
 }

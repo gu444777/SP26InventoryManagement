@@ -11,21 +11,26 @@ public class AuthService : IAuthService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditLogService _auditLogService;
     private readonly CurrentUserContext _currentUserContext;
+    private readonly ISessionValidationService _sessionValidationService;
 
     public AuthService(
         IUserRepository userRepository,
         IPasswordHasher passwordHasher,
         IAuditLogService auditLogService,
-        CurrentUserContext currentUserContext)
+        CurrentUserContext currentUserContext,
+        ISessionValidationService sessionValidationService)
     {
         _userRepository = userRepository;
         _passwordHasher = passwordHasher;
         _auditLogService = auditLogService;
         _currentUserContext = currentUserContext;
+        _sessionValidationService = sessionValidationService;
     }
 
     public async Task<LoginResult> LoginAsync(string username, string password, string? clientIp, string? clientApp, CancellationToken ct)
     {
+        _currentUserContext.Clear();
+
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
             return LoginResult.Failure("Username and password are required.");
@@ -108,6 +113,12 @@ public class AuthService : IAuthService
 
     public async Task<OperationResult> ChangePasswordAsync(int userId, string currentPassword, string newPassword, string confirmPassword, CancellationToken ct)
     {
+        OperationResult sessionValidation = await _sessionValidationService.EnsureSessionForUserAsync(userId, requiredRoleCode: null, ct);
+        if (!sessionValidation.IsSuccess)
+        {
+            return sessionValidation;
+        }
+
         if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword) || string.IsNullOrWhiteSpace(confirmPassword))
         {
             return OperationResult.Failure("Please fill in all password fields.");
@@ -175,6 +186,11 @@ public class AuthService : IAuthService
             ct: ct);
 
         return OperationResult.Success();
+    }
+
+    public void Logout()
+    {
+        _currentUserContext.Clear();
     }
 
     private static string ValidatePasswordPolicy(string password)

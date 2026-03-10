@@ -7,33 +7,50 @@ namespace SP26InventoryManagement.Services;
 
 public class UserManagementService : IUserManagementService
 {
+    private const string AdminRoleCode = "ADMIN";
+
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
     private readonly IUserRoleRepository _userRoleRepository;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditLogService _auditLogService;
+    private readonly ISessionValidationService _sessionValidationService;
 
     public UserManagementService(
         IUserRepository userRepository,
         IRoleRepository roleRepository,
         IUserRoleRepository userRoleRepository,
         IPasswordHasher passwordHasher,
-        IAuditLogService auditLogService)
+        IAuditLogService auditLogService,
+        ISessionValidationService sessionValidationService)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
         _userRoleRepository = userRoleRepository;
         _passwordHasher = passwordHasher;
         _auditLogService = auditLogService;
+        _sessionValidationService = sessionValidationService;
     }
 
-    public Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, CancellationToken ct)
+    public async Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, CancellationToken ct)
     {
-        return _userRepository.SearchAsync(criteria, ct);
+        OperationResult authorization = await _sessionValidationService.EnsureCurrentSessionAsync(AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        return await _userRepository.SearchAsync(criteria, ct);
     }
 
     public async Task<CreateUserResult> CreateUserAsync(CreateUserRequest request, int actorUserId, CancellationToken ct)
     {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return CreateUserResult.Failure(authorization.ErrorMessage ?? "Access denied.");
+        }
+
         string username = request.Username.Trim();
         string fullName = request.FullName.Trim();
         string? email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
@@ -111,6 +128,12 @@ public class UserManagementService : IUserManagementService
 
     public async Task<OperationResult> SetUserRolesAsync(int targetUserId, IReadOnlyCollection<int> roleIds, int actorUserId, CancellationToken ct)
     {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return authorization;
+        }
+
         IReadOnlyCollection<int> normalizedRoleIds = roleIds.Distinct().ToArray();
         var targetUser = await _userRepository.GetByIdWithRolesAsync(targetUserId, ct);
         if (targetUser is null)
@@ -127,7 +150,7 @@ public class UserManagementService : IUserManagementService
             }
         }
 
-        int? adminRoleId = await _roleRepository.GetRoleIdByCodeAsync("ADMIN", ct);
+        int? adminRoleId = await _roleRepository.GetRoleIdByCodeAsync(AdminRoleCode, ct);
         if (adminRoleId.HasValue && actorUserId == targetUserId)
         {
             bool hasAdminBefore = targetUser.UserRoleUsers.Any(userRole => userRole.RoleId == adminRoleId.Value);
@@ -191,6 +214,12 @@ public class UserManagementService : IUserManagementService
 
     public async Task<ResetPasswordResult> ResetPasswordAsync(int targetUserId, int actorUserId, CancellationToken ct)
     {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return ResetPasswordResult.Failure(authorization.ErrorMessage ?? "Access denied.");
+        }
+
         var targetUser = await _userRepository.GetByIdAsync(targetUserId, ct);
         if (targetUser is null)
         {
@@ -231,6 +260,12 @@ public class UserManagementService : IUserManagementService
 
     public async Task<OperationResult> DeactivateUserAsync(int targetUserId, int actorUserId, CancellationToken ct)
     {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return authorization;
+        }
+
         if (targetUserId == actorUserId)
         {
             return OperationResult.Failure("You cannot deactivate your own account.");
@@ -279,6 +314,12 @@ public class UserManagementService : IUserManagementService
 
     public async Task<OperationResult> ReactivateUserAsync(int targetUserId, int actorUserId, CancellationToken ct)
     {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return authorization;
+        }
+
         var targetUser = await _userRepository.GetByIdAsync(targetUserId, ct);
         if (targetUser is null)
         {

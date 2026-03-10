@@ -6,16 +6,28 @@ namespace SP26InventoryManagement.ViewModels;
 
 public class MainWindowViewModel : ObservableObject
 {
+    private readonly IAuthService _authService;
     private readonly CurrentUserContext _currentUserContext;
     private readonly IUserDialogService _userDialogService;
+    private readonly IMessageService _messageService;
     private readonly AsyncRelayCommand _openChangePasswordCommand;
+    private readonly AsyncRelayCommand _logoutCommand;
 
-    public MainWindowViewModel(CurrentUserContext currentUserContext, IUserDialogService userDialogService)
+    public MainWindowViewModel(
+        IAuthService authService,
+        CurrentUserContext currentUserContext,
+        IUserDialogService userDialogService,
+        IMessageService messageService)
     {
+        _authService = authService;
         _currentUserContext = currentUserContext;
         _userDialogService = userDialogService;
+        _messageService = messageService;
         _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, CanOpenChangePassword);
+        _logoutCommand = new AsyncRelayCommand(LogoutAsync, CanLogout);
     }
+
+    public event Action? LogoutRequested;
 
     public string Username => _currentUserContext.Username;
 
@@ -23,14 +35,21 @@ public class MainWindowViewModel : ObservableObject
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 
+    public ICommand LogoutCommand => _logoutCommand;
+
     private bool CanOpenChangePassword()
     {
-        return _currentUserContext.UserId.HasValue;
+        return _currentUserContext.IsAuthenticated && _currentUserContext.UserId.HasValue;
+    }
+
+    private bool CanLogout()
+    {
+        return _currentUserContext.IsAuthenticated;
     }
 
     private Task OpenChangePasswordAsync()
     {
-        if (!_currentUserContext.UserId.HasValue)
+        if (!_currentUserContext.IsAuthenticated || !_currentUserContext.UserId.HasValue)
         {
             return Task.CompletedTask;
         }
@@ -39,5 +58,17 @@ public class MainWindowViewModel : ObservableObject
             _currentUserContext.UserId.Value,
             _currentUserContext.Username,
             CancellationToken.None);
+    }
+
+    private Task LogoutAsync()
+    {
+        if (!_messageService.Confirm("Do you want to logout?", "Logout"))
+        {
+            return Task.CompletedTask;
+        }
+
+        _authService.Logout();
+        LogoutRequested?.Invoke();
+        return Task.CompletedTask;
     }
 }

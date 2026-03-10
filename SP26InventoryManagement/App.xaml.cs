@@ -12,6 +12,8 @@ namespace SP26InventoryManagement
 {
     public partial class App : Application
     {
+        private const string AdminRoleCode = "ADMIN";
+
         public IServiceProvider Services { get; private set; } = null!;
 
         protected override void OnStartup(StartupEventArgs e)
@@ -21,24 +23,26 @@ namespace SP26InventoryManagement
             Services = ConfigureServices();
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-            var loginWindow = Services.GetRequiredService<LoginWindow>();
-            bool? loginResult = loginWindow.ShowDialog();
-
-            if (loginResult != true)
+            if (!ShowLoginAndOpenStartWindow())
             {
+                Shutdown();
+            }
+        }
+
+        public void NavigateToLoginAfterLogout(Window sourceWindow)
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            sourceWindow.Hide();
+
+            bool loginSucceeded = ShowLoginAndOpenStartWindow();
+            if (!loginSucceeded)
+            {
+                sourceWindow.Close();
                 Shutdown();
                 return;
             }
 
-            CurrentUserContext currentUser = Services.GetRequiredService<CurrentUserContext>();
-
-            Window startWindow = currentUser.IsInRole("ADMIN")
-                ? Services.GetRequiredService<AdminUserManagementWindow>()
-                : Services.GetRequiredService<MainWindow>();
-
-            MainWindow = startWindow;
-            ShutdownMode = ShutdownMode.OnMainWindowClose;
-            startWindow.Show();
+            sourceWindow.Close();
         }
 
         protected override void OnExit(ExitEventArgs e)
@@ -78,6 +82,7 @@ namespace SP26InventoryManagement
 
             services.AddTransient<IAuthService, AuthService>();
             services.AddTransient<IUserManagementService, UserManagementService>();
+            services.AddTransient<ISessionValidationService, SessionValidationService>();
             services.AddTransient<IAuditLogService, AuditLogService>();
             services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
             services.AddSingleton<IMessageService, MessageService>();
@@ -96,6 +101,49 @@ namespace SP26InventoryManagement
             services.AddTransient<ChangePasswordWindow>();
 
             return services.BuildServiceProvider();
+        }
+
+        private bool ShowLoginAndOpenStartWindow()
+        {
+            var loginWindow = Services.GetRequiredService<LoginWindow>();
+            bool? loginResult = loginWindow.ShowDialog();
+
+            if (loginResult != true)
+            {
+                return false;
+            }
+
+            CurrentUserContext currentUser = Services.GetRequiredService<CurrentUserContext>();
+            if (!currentUser.IsAuthenticated)
+            {
+                MessageBox.Show(
+                    "Unable to establish authenticated session. Please try again.",
+                    "Authentication Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return false;
+            }
+
+            try
+            {
+                Window startWindow = currentUser.IsInRole(AdminRoleCode)
+                    ? Services.GetRequiredService<AdminUserManagementWindow>()
+                    : Services.GetRequiredService<MainWindow>();
+
+                MainWindow = startWindow;
+                ShutdownMode = ShutdownMode.OnMainWindowClose;
+                startWindow.Show();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to open start window.\n\n{ex.Message}",
+                    "Startup Error",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return false;
+            }
         }
     }
 

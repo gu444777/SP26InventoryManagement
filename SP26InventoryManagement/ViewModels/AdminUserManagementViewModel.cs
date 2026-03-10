@@ -10,6 +10,9 @@ namespace SP26InventoryManagement.ViewModels;
 
 public class AdminUserManagementViewModel : ObservableObject
 {
+    private const string AdminRoleCode = "ADMIN";
+
+    private readonly IAuthService _authService;
     private readonly IUserManagementService _userManagementService;
     private readonly IRoleRepository _roleRepository;
     private readonly CurrentUserContext _currentUserContext;
@@ -25,6 +28,7 @@ public class AdminUserManagementViewModel : ObservableObject
     private readonly AsyncRelayCommand _deactivateUserCommand;
     private readonly AsyncRelayCommand _reactivateUserCommand;
     private readonly AsyncRelayCommand _openChangePasswordCommand;
+    private readonly AsyncRelayCommand _logoutCommand;
 
     private string _searchText = string.Empty;
     private bool _isBusy;
@@ -36,12 +40,14 @@ public class AdminUserManagementViewModel : ObservableObject
     private FilterOption<bool?>? _selectedStatusFilter;
 
     public AdminUserManagementViewModel(
+        IAuthService authService,
         IUserManagementService userManagementService,
         IRoleRepository roleRepository,
         CurrentUserContext currentUserContext,
         IUserDialogService userDialogService,
         IMessageService messageService)
     {
+        _authService = authService;
         _userManagementService = userManagementService;
         _roleRepository = roleRepository;
         _currentUserContext = currentUserContext;
@@ -60,16 +66,19 @@ public class AdminUserManagementViewModel : ObservableObject
 
         RoleSelections = [];
 
-        _searchCommand = new AsyncRelayCommand(() => LoadUsersAsync(1), () => !IsBusy);
+        _searchCommand = new AsyncRelayCommand(() => LoadUsersAsync(1), () => !IsBusy && HasAdminSession());
         _nextPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage + 1), CanMoveToNextPage);
         _previousPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage - 1), CanMoveToPreviousPage);
-        _openCreateUserCommand = new AsyncRelayCommand(OpenCreateUserAsync, () => !IsBusy);
+        _openCreateUserCommand = new AsyncRelayCommand(OpenCreateUserAsync, () => !IsBusy && HasAdminSession());
         _saveRolesCommand = new AsyncRelayCommand(SaveRolesAsync, CanSaveRoles);
         _resetPasswordCommand = new AsyncRelayCommand(ResetPasswordAsync, CanOperateOnSelectedUser);
         _deactivateUserCommand = new AsyncRelayCommand(DeactivateUserAsync, CanDeactivateSelectedUser);
         _reactivateUserCommand = new AsyncRelayCommand(ReactivateUserAsync, CanReactivateSelectedUser);
-        _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, () => _currentUserContext.UserId.HasValue && !IsBusy);
+        _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, () => _currentUserContext.IsAuthenticated && !IsBusy);
+        _logoutCommand = new AsyncRelayCommand(LogoutAsync, () => _currentUserContext.IsAuthenticated && !IsBusy);
     }
+
+    public event Action? LogoutRequested;
 
     public ObservableCollection<UserListItemDto> Users { get; }
 
@@ -179,8 +188,15 @@ public class AdminUserManagementViewModel : ObservableObject
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 
+    public ICommand LogoutCommand => _logoutCommand;
+
     public async Task InitializeAsync(CancellationToken ct)
     {
+        if (!HasAdminSession())
+        {
+            throw new UnauthorizedAccessException("Access denied. ADMIN role is required.");
+        }
+
         IReadOnlyList<RoleOptionDto> roles = await _roleRepository.GetActiveRolesAsync(ct);
         RoleFilterOptions.Clear();
         RoleFilterOptions.Add(new FilterOption<int?> { Label = "All roles", Value = null });
@@ -209,6 +225,12 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task LoadUsersAsync(int pageNumber)
     {
+        if (!HasAdminSession())
+        {
+            StatusMessage = "Session is no longer valid for admin actions.";
+            return;
+        }
+
         if (IsBusy)
         {
             return;
@@ -245,6 +267,12 @@ public class AdminUserManagementViewModel : ObservableObject
             TotalCount = result.TotalCount;
             SelectedUser = Users.FirstOrDefault();
         }
+        catch (UnauthorizedAccessException ex)
+        {
+            StatusMessage = ex.Message;
+            _messageService.ShowError(ex.Message);
+            TriggerLogout();
+        }
         catch (Exception ex)
         {
             StatusMessage = $"Failed to load users: {ex.Message}";
@@ -266,7 +294,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task SaveRolesAsync()
     {
-        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
         {
             return;
         }
@@ -279,6 +307,11 @@ public class AdminUserManagementViewModel : ObservableObject
 
         if (!result.IsSuccess)
         {
+            if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
             _messageService.ShowError(result.ErrorMessage ?? "Failed to update roles.");
             return;
         }
@@ -289,7 +322,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task ResetPasswordAsync()
     {
-        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
         {
             return;
         }
@@ -306,6 +339,11 @@ public class AdminUserManagementViewModel : ObservableObject
 
         if (!result.IsSuccess)
         {
+            if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
             _messageService.ShowError(result.ErrorMessage ?? "Failed to reset password.");
             return;
         }
@@ -317,7 +355,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task DeactivateUserAsync()
     {
-        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
         {
             return;
         }
@@ -334,6 +372,11 @@ public class AdminUserManagementViewModel : ObservableObject
 
         if (!result.IsSuccess)
         {
+            if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
             _messageService.ShowError(result.ErrorMessage ?? "Failed to deactivate user.");
             return;
         }
@@ -343,7 +386,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task ReactivateUserAsync()
     {
-        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
         {
             return;
         }
@@ -355,6 +398,11 @@ public class AdminUserManagementViewModel : ObservableObject
 
         if (!result.IsSuccess)
         {
+            if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
             _messageService.ShowError(result.ErrorMessage ?? "Failed to reactivate user.");
             return;
         }
@@ -364,7 +412,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private Task OpenChangePasswordAsync()
     {
-        if (!_currentUserContext.UserId.HasValue)
+        if (!_currentUserContext.IsAuthenticated || !_currentUserContext.UserId.HasValue)
         {
             return Task.CompletedTask;
         }
@@ -373,6 +421,17 @@ public class AdminUserManagementViewModel : ObservableObject
             _currentUserContext.UserId.Value,
             _currentUserContext.Username,
             CancellationToken.None);
+    }
+
+    private Task LogoutAsync()
+    {
+        if (!_messageService.Confirm("Do you want to logout?", "Logout"))
+        {
+            return Task.CompletedTask;
+        }
+
+        TriggerLogout();
+        return Task.CompletedTask;
     }
 
     private void SyncRoleSelectionForSelectedUser()
@@ -395,17 +454,17 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private bool CanMoveToNextPage()
     {
-        return !IsBusy && TotalPages > 0 && CurrentPage < TotalPages;
+        return !IsBusy && HasAdminSession() && TotalPages > 0 && CurrentPage < TotalPages;
     }
 
     private bool CanMoveToPreviousPage()
     {
-        return !IsBusy && CurrentPage > 1;
+        return !IsBusy && HasAdminSession() && CurrentPage > 1;
     }
 
     private bool CanOperateOnSelectedUser()
     {
-        return !IsBusy && SelectedUser is not null && _currentUserContext.UserId.HasValue;
+        return !IsBusy && HasAdminSession() && SelectedUser is not null && _currentUserContext.UserId.HasValue;
     }
 
     private bool CanDeactivateSelectedUser()
@@ -420,7 +479,37 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private bool CanSaveRoles()
     {
-        return !IsBusy && SelectedUser is not null;
+        return !IsBusy && HasAdminSession() && SelectedUser is not null;
+    }
+
+    private bool HasAdminSession()
+    {
+        return _currentUserContext.IsAuthenticated && _currentUserContext.IsInRole(AdminRoleCode);
+    }
+
+    private bool HandleAccessOrSessionFailure(string? errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return false;
+        }
+
+        if (errorMessage.Contains("Session", StringComparison.OrdinalIgnoreCase)
+            || errorMessage.Contains("Access denied", StringComparison.OrdinalIgnoreCase)
+            || errorMessage.Contains("inactive", StringComparison.OrdinalIgnoreCase))
+        {
+            _messageService.ShowError(errorMessage);
+            TriggerLogout();
+            return true;
+        }
+
+        return false;
+    }
+
+    private void TriggerLogout()
+    {
+        _authService.Logout();
+        LogoutRequested?.Invoke();
     }
 
     private void RaiseCommandStates()
@@ -434,5 +523,6 @@ public class AdminUserManagementViewModel : ObservableObject
         _deactivateUserCommand.RaiseCanExecuteChanged();
         _reactivateUserCommand.RaiseCanExecuteChanged();
         _openChangePasswordCommand.RaiseCanExecuteChanged();
+        _logoutCommand.RaiseCanExecuteChanged();
     }
 }

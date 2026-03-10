@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Windows.Controls;
 using SP26InventoryManagement.DTOs;
 using SP26InventoryManagement.Services;
 
@@ -10,7 +11,6 @@ public class LoginViewModel : ObservableObject
     private readonly AsyncRelayCommand _loginCommand;
 
     private string _username = string.Empty;
-    private string _password = string.Empty;
     private string _errorMessage = string.Empty;
     private bool _isBusy;
 
@@ -28,18 +28,6 @@ public class LoginViewModel : ObservableObject
         set
         {
             if (SetProperty(ref _username, value))
-            {
-                _loginCommand.RaiseCanExecuteChanged();
-            }
-        }
-    }
-
-    public string Password
-    {
-        get => _password;
-        set
-        {
-            if (SetProperty(ref _password, value))
             {
                 _loginCommand.RaiseCanExecuteChanged();
             }
@@ -66,21 +54,34 @@ public class LoginViewModel : ObservableObject
 
     public ICommand LoginCommand => _loginCommand;
 
-    private bool CanLogin()
+    public void NotifyPasswordInputChanged()
     {
-        return !IsBusy && !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(Password);
+        _loginCommand.RaiseCanExecuteChanged();
     }
 
-    private async Task LoginAsync()
+    private bool CanLogin(object? parameter)
     {
+        string password = parameter is PasswordBox passwordBox ? passwordBox.Password : string.Empty;
+        return !IsBusy && !string.IsNullOrWhiteSpace(Username) && !string.IsNullOrWhiteSpace(password);
+    }
+
+    private async Task LoginAsync(object? parameter)
+    {
+        if (parameter is not PasswordBox passwordBox)
+        {
+            ErrorMessage = "Password is required.";
+            return;
+        }
+
         ErrorMessage = string.Empty;
         IsBusy = true;
 
         try
         {
+            string password = passwordBox.Password;
             LoginResult result = await _authService.LoginAsync(
                 Username.Trim(),
-                Password,
+                password,
                 clientIp: null,
                 clientApp: "WPF-Client",
                 ct: CancellationToken.None);
@@ -95,7 +96,9 @@ public class LoginViewModel : ObservableObject
         }
         finally
         {
+            passwordBox.Clear();
             IsBusy = false;
+            _loginCommand.RaiseCanExecuteChanged();
         }
     }
 }

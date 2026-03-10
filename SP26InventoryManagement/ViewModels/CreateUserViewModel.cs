@@ -10,6 +10,8 @@ namespace SP26InventoryManagement.ViewModels;
 
 public class CreateUserViewModel : ObservableObject
 {
+    private const string AdminRoleCode = "ADMIN";
+
     private readonly IUserManagementService _userManagementService;
     private readonly IRoleRepository _roleRepository;
     private readonly CurrentUserContext _currentUserContext;
@@ -124,7 +126,8 @@ public class CreateUserViewModel : ObservableObject
 
     private bool CanCreateUser()
     {
-        return !IsBusy
+        return HasAdminSession()
+            && !IsBusy
             && !string.IsNullOrWhiteSpace(Username)
             && !string.IsNullOrWhiteSpace(FullName)
             && RoleSelections.Any(role => role.IsSelected);
@@ -132,7 +135,7 @@ public class CreateUserViewModel : ObservableObject
 
     private async Task CreateUserAsync()
     {
-        if (!_currentUserContext.UserId.HasValue)
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue)
         {
             ErrorMessage = "Your session has expired.";
             return;
@@ -181,5 +184,10 @@ public class CreateUserViewModel : ObservableObject
         {
             _createUserCommand.RaiseCanExecuteChanged();
         }
+    }
+
+    private bool HasAdminSession()
+    {
+        return _currentUserContext.IsAuthenticated && _currentUserContext.IsInRole(AdminRoleCode);
     }
 }

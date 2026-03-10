@@ -75,7 +75,7 @@ public class AdminUserManagementViewModel : ObservableObject
         _deactivateUserCommand = new AsyncRelayCommand(DeactivateUserAsync, CanDeactivateSelectedUser);
         _reactivateUserCommand = new AsyncRelayCommand(ReactivateUserAsync, CanReactivateSelectedUser);
         _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, () => _currentUserContext.IsAuthenticated && !IsBusy);
-        _logoutCommand = new AsyncRelayCommand(LogoutAsync, () => _currentUserContext.IsAuthenticated && !IsBusy);
+        _logoutCommand = new AsyncRelayCommand(LogoutAsync, () => !IsBusy);
     }
 
     public event Action? LogoutRequested;

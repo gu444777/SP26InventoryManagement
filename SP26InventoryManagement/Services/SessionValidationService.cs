@@ -25,7 +25,11 @@ public class SessionValidationService : ISessionValidationService
         return EnsureSessionForUserAsync(_currentUserContext.UserId.Value, requiredRoleCode, ct);
     }
 
-    public async Task<OperationResult> EnsureSessionForUserAsync(int expectedUserId, string? requiredRoleCode, CancellationToken ct)
+    public async Task<OperationResult> EnsureSessionForUserAsync(
+        int expectedUserId,
+        string? requiredRoleCode,
+        CancellationToken ct,
+        bool forceRevalidation = false)
     {
         if (!_currentUserContext.UserId.HasValue)
         {
@@ -34,6 +38,7 @@ public class SessionValidationService : ISessionValidationService
 
         if (_currentUserContext.UserId.Value != expectedUserId)
         {
+            _currentUserContext.Clear();
             return OperationResult.Failure("Session mismatch detected. Please log in again.");
         }
 
@@ -42,8 +47,7 @@ public class SessionValidationService : ISessionValidationService
             return OperationResult.Failure("Session expired. Please log in again.");
         }
 
-        bool needRevalidation = !string.IsNullOrWhiteSpace(requiredRoleCode)
-            || _currentUserContext.NeedsRevalidation(requiredRoleCode);
+        bool needRevalidation = forceRevalidation || _currentUserContext.NeedsRevalidation(requiredRoleCode);
         if (needRevalidation)
         {
             var user = await _userRepository.GetByIdWithRolesAsync(expectedUserId, ct);

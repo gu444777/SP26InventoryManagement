@@ -44,7 +44,7 @@ public class MainWindowViewModel : ObservableObject
 
     private bool CanLogout()
     {
-        return _currentUserContext.IsAuthenticated;
+        return true;
     }
 
     private Task OpenChangePasswordAsync()

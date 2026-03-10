@@ -113,7 +113,11 @@ public class AuthService : IAuthService
 
     public async Task<OperationResult> ChangePasswordAsync(int userId, string currentPassword, string newPassword, string confirmPassword, CancellationToken ct)
     {
-        OperationResult sessionValidation = await _sessionValidationService.EnsureSessionForUserAsync(userId, requiredRoleCode: null, ct);
+        OperationResult sessionValidation = await _sessionValidationService.EnsureSessionForUserAsync(
+            userId,
+            requiredRoleCode: null,
+            ct,
+            forceRevalidation: true);
         if (!sessionValidation.IsSuccess)
         {
             return sessionValidation;

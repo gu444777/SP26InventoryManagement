@@ -32,9 +32,9 @@ public class UserManagementService : IUserManagementService
         _sessionValidationService = sessionValidationService;
     }
 
-    public async Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, CancellationToken ct)
+    public async Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, int actorUserId, CancellationToken ct)
     {
-        OperationResult authorization = await _sessionValidationService.EnsureCurrentSessionAsync(AdminRoleCode, ct);
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
         {
             throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");

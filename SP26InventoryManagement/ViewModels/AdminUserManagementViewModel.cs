@@ -225,7 +225,7 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task LoadUsersAsync(int pageNumber)
     {
-        if (!HasAdminSession())
+        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue)
         {
             StatusMessage = "Session is no longer valid for admin actions.";
             return;
@@ -255,6 +255,7 @@ public class AdminUserManagementViewModel : ObservableObject
                     PageNumber = pageNumber,
                     PageSize = PageSize
                 },
+                actorUserId: _currentUserContext.UserId.Value,
                 CancellationToken.None);
 
             Users.Clear();

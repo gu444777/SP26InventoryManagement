@@ -166,8 +166,9 @@ public class CreateUserViewModel : ObservableObject
                 return;
             }
 
-            _messageService.ShowInfo(
-                $"User created successfully.\n\nUsername: {request.Username}\nTemporary password: {result.GeneratedPassword}",
+            _messageService.ShowPasswordWithCopy(
+                request.Username,
+                result.GeneratedPassword ?? string.Empty,
                 "User Created");
 
             CloseRequested?.Invoke(true);

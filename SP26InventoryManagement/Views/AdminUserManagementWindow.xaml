@@ -74,7 +74,9 @@
             </Border>
 
             <Border Grid.Column="1" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="6" Padding="10">
-                <DockPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <DockPanel>
                     <StackPanel DockPanel.Dock="Top">
                         <TextBlock Text="Actions"
                                    FontWeight="SemiBold"
@@ -103,6 +105,10 @@
                                 Command="{Binding LogoutCommand}"
                                 Height="32"
                                 Margin="0,0,0,12" />
+                        <Button Content="Save Role Changes"
+                                Command="{Binding SaveRolesCommand}"
+                                Height="32"
+                                Margin="0,0,0,12" />
                     </StackPanel>
 
                     <StackPanel>
@@ -126,12 +132,9 @@
                                 </ItemsControl>
                             </ScrollViewer>
                         </Border>
-                        <Button Content="Save Roles"
-                                Command="{Binding SaveRolesCommand}"
-                                Height="32"
-                                Margin="0,10,0,0" />
                     </StackPanel>
                 </DockPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
 

@@ -58,7 +58,7 @@ public class MessageService : IMessageService
         {
             Content = "Copy Password",
             MinWidth = 120,
-            Padding = new Thickness(10, 6),
+            Padding = new Thickness(10, 6, 10, 6),
             Margin = new Thickness(0, 0, 8, 0)
         };
 
@@ -66,7 +66,7 @@ public class MessageService : IMessageService
         {
             Content = "Close",
             MinWidth = 90,
-            Padding = new Thickness(10, 6),
+            Padding = new Thickness(10, 6, 10, 6),
             IsDefault = true
         };
 

@@ -290,6 +290,11 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task OpenCreateUserAsync()
     {
+        if (!EnsureAdminSessionForAction())
+        {
+            return;
+        }
+
         bool created = await _userDialogService.ShowCreateUserDialogAsync(CancellationToken.None);
         if (created)
         {
@@ -299,13 +304,21 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task SaveRolesAsync()
     {
-        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!EnsureAdminSessionForAction())
         {
             return;
         }
 
+        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        {
+            _messageService.ShowError("Please select a user to update roles.");
+            return;
+        }
+
+        int targetUserId = SelectedUser.UserId;
+
         OperationResult result = await _userManagementService.SetUserRolesAsync(
-            targetUserId: SelectedUser.UserId,
+            targetUserId: targetUserId,
             roleIds: RoleSelections.Where(role => role.IsSelected).Select(role => role.RoleId).ToArray(),
             actorUserId: _currentUserContext.UserId.Value,
             ct: CancellationToken.None);
@@ -322,13 +335,19 @@ public class AdminUserManagementViewModel : ObservableObject
         }
 
         _messageService.ShowInfo("User roles updated successfully.");
-        await LoadUsersAsync(CurrentPage);
+        await LoadUsersAsync(CurrentPage, targetUserId);
     }
 
     private async Task ResetPasswordAsync()
     {
-        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!EnsureAdminSessionForAction())
         {
+            return;
+        }
+
+        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        {
+            _messageService.ShowError("Please select a user to reset password.");
             return;
         }
 
@@ -361,10 +380,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
     private async Task DeactivateUserAsync()
     {
-        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!EnsureAdminSessionForAction())
         {
             return;
         }
+
+        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        {
+            _messageService.ShowError("Please select a user to deactivate.");
+            return;
+        }
+
+        int targetUserId = SelectedUser.UserId;
 
         if (!_messageService.Confirm($"Deactivate user '{SelectedUser.Username}'?"))
         {
@@ -372,7 +399,7 @@ public class AdminUserManagementViewModel : ObservableObject
         }
 
         OperationResult result = await _userManagementService.DeactivateUserAsync(
-            SelectedUser.UserId,
+            targetUserId,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
@@ -387,18 +414,26 @@ public class AdminUserManagementViewModel : ObservableObject
             return;
         }
 
-        await LoadUsersAsync(CurrentPage);
+        await LoadUsersAsync(CurrentPage, targetUserId);
     }
 
     private async Task ReactivateUserAsync()
     {
-        if (!HasAdminSession() || !_currentUserContext.UserId.HasValue || SelectedUser is null)
+        if (!EnsureAdminSessionForAction())
         {
             return;
         }
 
+        if (!_currentUserContext.UserId.HasValue || SelectedUser is null)
+        {
+            _messageService.ShowError("Please select a user to reactivate.");
+            return;
+        }
+
+        int targetUserId = SelectedUser.UserId;
+
         OperationResult result = await _userManagementService.ReactivateUserAsync(
-            SelectedUser.UserId,
+            targetUserId,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
@@ -413,7 +448,7 @@ public class AdminUserManagementViewModel : ObservableObject
             return;
         }
 
-        await LoadUsersAsync(CurrentPage);
+        await LoadUsersAsync(CurrentPage, targetUserId);
     }
 
     private Task OpenChangePasswordAsync()
@@ -491,6 +526,18 @@ public class AdminUserManagementViewModel : ObservableObject
     private bool HasAdminSession()
     {
         return _currentUserContext.IsAuthenticated && _currentUserContext.IsInRole(AdminRoleCode);
+    }
+
+    private bool EnsureAdminSessionForAction()
+    {
+        if (HasAdminSession())
+        {
+            return true;
+        }
+
+        _messageService.ShowError("Your admin session has expired or no longer has ADMIN permission.");
+        TriggerLogout();
+        return false;
     }
 
     private bool HandleAccessOrSessionFailure(string? errorMessage)

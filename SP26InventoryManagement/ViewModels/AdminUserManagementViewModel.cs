@@ -223,7 +223,7 @@ public class AdminUserManagementViewModel : ObservableObject
         await LoadUsersAsync(1);
     }
 
-    private async Task LoadUsersAsync(int pageNumber)
+    private async Task LoadUsersAsync(int pageNumber, int? preferredUserId = null)
     {
         if (!HasAdminSession() || !_currentUserContext.UserId.HasValue)
         {
@@ -240,6 +240,8 @@ public class AdminUserManagementViewModel : ObservableObject
         {
             pageNumber = 1;
         }
+
+        int? selectedUserId = preferredUserId ?? SelectedUser?.UserId;
 
         IsBusy = true;
         StatusMessage = string.Empty;
@@ -266,7 +268,9 @@ public class AdminUserManagementViewModel : ObservableObject
 
             CurrentPage = result.PageNumber;
             TotalCount = result.TotalCount;
-            SelectedUser = Users.FirstOrDefault();
+            SelectedUser = selectedUserId.HasValue
+                ? Users.FirstOrDefault(user => user.UserId == selectedUserId.Value) ?? Users.FirstOrDefault()
+                : Users.FirstOrDefault();
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -349,8 +353,9 @@ public class AdminUserManagementViewModel : ObservableObject
             return;
         }
 
-        _messageService.ShowInfo(
-            $"Password reset successfully.\n\nUsername: {SelectedUser.Username}\nTemporary password: {result.GeneratedPassword}",
+        _messageService.ShowPasswordWithCopy(
+            SelectedUser.Username,
+            result.GeneratedPassword ?? string.Empty,
             "Password Reset");
     }
 

@@ -1,5 +1,6 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using SP26InventoryManagement.DTOs;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Models;
@@ -161,7 +162,7 @@ public class IssueService : IIssueService
 
         DateTime now = DateTime.UtcNow;
         DateTime transactionDate = request.TransactionDate == default ? now : request.TransactionDate;
-        await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await using var dbTransaction = await BeginTransactionAsync(serializable: true, ct);
 
         try
         {
@@ -191,7 +192,8 @@ public class IssueService : IIssueService
                 Remarks = NormalizeNullableText(request.Remarks),
                 CreatedByUserId = actorUserId,
                 CreatedAt = now,
-                TotalAmount = computation.TotalSales
+                TotalAmount = computation.TotalSales,
+                RowVersion = Array.Empty<byte>()
             };
 
             _dbContext.StockTransactions.Add(transaction);
@@ -216,7 +218,8 @@ public class IssueService : IIssueService
                     ReceivedDateSnapshot = allocation.ReceivedDate,
                     ExpiryDateSnapshot = allocation.ExpiryDate,
                     Notes = $"AUTO_ALLOCATED_{allocation.AllocationRule}",
-                    CreatedAt = now
+                    CreatedAt = now,
+                    RowVersion = Array.Empty<byte>()
                 })
                 .ToList();
 
@@ -493,7 +496,7 @@ public class IssueService : IIssueService
 
         _dbContext.ChangeTracker.Clear();
 
-        await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await using var dbTransaction = await BeginTransactionAsync(serializable: true, ct);
 
         try
         {
@@ -948,6 +951,16 @@ public class IssueService : IIssueService
         }
 
         return $"ISSUE-{dateToken}-{Guid.NewGuid():N}"[..30].ToUpperInvariant();
+    }
+
+    private Task<IDbContextTransaction> BeginTransactionAsync(bool serializable, CancellationToken ct)
+    {
+        if (serializable && _dbContext.Database.IsRelational())
+        {
+            return _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        }
+
+        return _dbContext.Database.BeginTransactionAsync(ct);
     }
 
     private async Task<OperationResult> EnsureRoleAsync(int actorUserId, string requiredRoleCode, CancellationToken ct)

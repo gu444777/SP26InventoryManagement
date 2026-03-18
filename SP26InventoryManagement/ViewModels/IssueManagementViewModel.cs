@@ -26,6 +26,7 @@ public class IssueManagementViewModel : ObservableObject
     private readonly AsyncRelayCommand _createIssueCommand;
     private readonly AsyncRelayCommand _refreshDraftIssuesCommand;
     private readonly AsyncRelayCommand _postIssueCommand;
+    private readonly AsyncRelayCommand _cancelDraftIssueCommand;
 
     private bool _isBusy;
     private string _statusMessage = string.Empty;
@@ -35,6 +36,7 @@ public class IssueManagementViewModel : ObservableObject
     private string _referenceNo = string.Empty;
     private string _remarks = string.Empty;
     private string _selectedProductAvailableQtyText = "Available Qty: -";
+    private decimal _selectedProductAvailableQty;
     private DateTime _transactionDate = DateTime.Today;
     private int _availableQtyRequestVersion;
     private int _draftIssueLineRequestVersion;
@@ -71,6 +73,7 @@ public class IssueManagementViewModel : ObservableObject
         _createIssueCommand = new AsyncRelayCommand(CreateIssueAsync, CanCreateIssue);
         _refreshDraftIssuesCommand = new AsyncRelayCommand(RefreshDraftIssuesAsync, CanRefreshDraftIssues);
         _postIssueCommand = new AsyncRelayCommand(PostSelectedIssueAsync, CanPostSelectedIssue);
+        _cancelDraftIssueCommand = new AsyncRelayCommand(CancelSelectedDraftIssueAsync, CanCancelSelectedIssue);
     }
 
     public event Action? LogoutRequested;
@@ -144,6 +147,7 @@ public class IssueManagementViewModel : ObservableObject
                 int requestVersion = Interlocked.Increment(ref _draftIssueLineRequestVersion);
                 _ = LoadSelectedDraftIssueLinesAsync(requestVersion);
                 _postIssueCommand.RaiseCanExecuteChanged();
+                _cancelDraftIssueCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -254,6 +258,8 @@ public class IssueManagementViewModel : ObservableObject
 
     public ICommand PostIssueCommand => _postIssueCommand;
 
+    public ICommand CancelDraftIssueCommand => _cancelDraftIssueCommand;
+
     public async Task InitializeAsync(CancellationToken ct)
     {
         if (!_currentUserContext.IsAuthenticated)
@@ -326,6 +332,13 @@ public class IssueManagementViewModel : ObservableObject
         if (!TryParsePositiveDecimal(AddQtyInput, out decimal qty))
         {
             _messageService.ShowError("Quantity must be a number greater than 0.");
+            return;
+        }
+
+        if (qty > _selectedProductAvailableQty)
+        {
+            _messageService.ShowError(
+                $"Quantity cannot be greater than available quantity ({_selectedProductAvailableQty:N3}).");
             return;
         }
 
@@ -627,6 +640,65 @@ public class IssueManagementViewModel : ObservableObject
         }
     }
 
+    private async Task CancelSelectedDraftIssueAsync()
+    {
+        if (!EnsureUserSessionForWriteAction(out int actorUserId, requireCreatePermission: false))
+        {
+            return;
+        }
+
+        if (!HasPostIssuePermission)
+        {
+            _messageService.ShowError("You do not have permission to cancel draft issues.");
+            return;
+        }
+
+        if (SelectedDraftIssue is null)
+        {
+            _messageService.ShowError("Please select a draft issue to cancel.");
+            return;
+        }
+
+        if (!_messageService.Confirm(
+                $"Cancel draft issue '{SelectedDraftIssue.TransactionNo}'?\nReserved quantity will be released.",
+                "Cancel Draft Issue"))
+        {
+            return;
+        }
+
+        IsBusy = true;
+
+        try
+        {
+            CancelIssueResult result = await ExecuteIssueServiceCallAsync(
+                () => _issueService.CancelDraftIssueAsync(
+                    SelectedDraftIssue.TransactionId,
+                    actorUserId,
+                    CancellationToken.None));
+
+            if (!result.IsSuccess)
+            {
+                if (HandleAccessOrSessionFailure(result.ErrorMessage))
+                {
+                    return;
+                }
+
+                _messageService.ShowError(result.ErrorMessage ?? "Failed to cancel draft issue.");
+                return;
+            }
+
+            _messageService.ShowInfo(
+                $"Draft issue cancelled: {result.TransactionNo}",
+                "Draft Cancelled");
+
+            await RefreshDraftIssuesAsync(setBusyState: false);
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     private async Task LoadSelectedDraftIssueLinesAsync(int requestVersion)
     {
         if (SelectedDraftIssue is null || !_currentUserContext.IsAuthenticated)
@@ -747,7 +819,22 @@ public class IssueManagementViewModel : ObservableObject
 
     private bool CanAddLine()
     {
-        return !IsBusy && HasCreateIssuePermission && SelectedProductToAdd is not null;
+        if (IsBusy || !HasCreateIssuePermission || SelectedProductToAdd is null)
+        {
+            return false;
+        }
+
+        if (!TryParsePositiveDecimal(AddQtyInput, out decimal qty))
+        {
+            return false;
+        }
+
+        if (qty > _selectedProductAvailableQty)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private bool CanRemoveSelectedLine()
@@ -788,6 +875,14 @@ public class IssueManagementViewModel : ObservableObject
     }
 
     private bool CanPostSelectedIssue()
+    {
+        return !IsBusy
+            && HasPostIssuePermission
+            && _currentUserContext.UserId.HasValue
+            && SelectedDraftIssue is not null;
+    }
+
+    private bool CanCancelSelectedIssue()
     {
         return !IsBusy
             && HasPostIssuePermission
@@ -855,7 +950,9 @@ public class IssueManagementViewModel : ObservableObject
 
         if (!_currentUserContext.IsAuthenticated)
         {
+            _selectedProductAvailableQty = 0;
             SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
             return;
         }
 
@@ -864,7 +961,9 @@ public class IssueManagementViewModel : ObservableObject
 
         if (selectedWarehouse is null || selectedProduct is null)
         {
+            _selectedProductAvailableQty = 0;
             SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
             return;
         }
 
@@ -882,10 +981,12 @@ public class IssueManagementViewModel : ObservableObject
                 return;
             }
 
+            _selectedProductAvailableQty = availableQty;
             string uom = string.IsNullOrWhiteSpace(selectedProduct.BaseUom)
                 ? string.Empty
                 : $" {selectedProduct.BaseUom}";
             SelectedProductAvailableQtyText = $"Available Qty: {availableQty:N3}{uom}";
+            _addLineCommand.RaiseCanExecuteChanged();
         }
         catch (UnauthorizedAccessException ex)
         {
@@ -894,7 +995,9 @@ public class IssueManagementViewModel : ObservableObject
                 return;
             }
 
+            _selectedProductAvailableQty = 0;
             SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
             _messageService.ShowError(ex.Message);
             TriggerLogout();
         }
@@ -905,7 +1008,9 @@ public class IssueManagementViewModel : ObservableObject
                 return;
             }
 
+            _selectedProductAvailableQty = 0;
             SelectedProductAvailableQtyText = $"Available Qty: unavailable ({ex.Message})";
+            _addLineCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -931,5 +1036,6 @@ public class IssueManagementViewModel : ObservableObject
         _createIssueCommand.RaiseCanExecuteChanged();
         _refreshDraftIssuesCommand.RaiseCanExecuteChanged();
         _postIssueCommand.RaiseCanExecuteChanged();
+        _cancelDraftIssueCommand.RaiseCanExecuteChanged();
     }
 }

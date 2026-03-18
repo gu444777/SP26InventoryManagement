@@ -61,6 +61,10 @@
                                 Command="{Binding RefreshDraftIssuesCommand}"
                                 Width="120"
                                 Margin="0,0,8,0" />
+                        <Button Content="Cancel Selected Draft"
+                                Command="{Binding CancelDraftIssueCommand}"
+                                Width="150"
+                                Margin="0,0,8,0" />
                         <Button Content="Post Selected Issue"
                                 Command="{Binding PostIssueCommand}"
                                 Width="140" />

@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using SP26InventoryManagement.DTOs;
 using SP26InventoryManagement.Infrastructure;
@@ -10,6 +11,7 @@ public class IssueService : IIssueService
     private const string IssueTransactionType = "ISSUE";
     private const string DocumentStatusDraft = "DRAFT";
     private const string DocumentStatusPosted = "POSTED";
+    private const string DocumentStatusCancelled = "CANCELLED";
     private const string StaffRoleCode = "WAREHOUSE_STAFF";
     private const string ManagerRoleCode = "MANAGER";
     private const string AdminRoleCode = "ADMIN";
@@ -144,16 +146,7 @@ public class IssueService : IIssueService
             return CreateIssueResult.Failure(authorization.ErrorMessage ?? "Access denied.");
         }
 
-        AllocationComputation computation = await ComputeAllocationAsync(request, ct);
-        if (!computation.IsSuccess)
-        {
-            return CreateIssueResult.Failure(computation.ErrorMessage ?? "Unable to create issue document.");
-        }
-
-        if (computation.Allocations.Count == 0)
-        {
-            return CreateIssueResult.Failure("No allocatable stock found for requested products.");
-        }
+        _dbContext.ChangeTracker.Clear();
 
         if (request.CustomerId.HasValue)
         {
@@ -168,12 +161,23 @@ public class IssueService : IIssueService
 
         DateTime now = DateTime.UtcNow;
         DateTime transactionDate = request.TransactionDate == default ? now : request.TransactionDate;
-        string transactionNo = await GenerateIssueTransactionNoAsync(transactionDate, ct);
-
-        await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(ct);
+        await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
 
         try
         {
+            AllocationComputation computation = await ComputeAllocationForReservationAsync(request, now, ct);
+            if (!computation.IsSuccess)
+            {
+                return CreateIssueResult.Failure(computation.ErrorMessage ?? "Unable to create issue document.");
+            }
+
+            if (computation.Allocations.Count == 0)
+            {
+                return CreateIssueResult.Failure("No allocatable stock found for requested products.");
+            }
+
+            string transactionNo = await GenerateIssueTransactionNoAsync(transactionDate, ct);
+
             StockTransaction transaction = new()
             {
                 TransactionNo = transactionNo,
@@ -245,11 +249,13 @@ public class IssueService : IIssueService
         catch (DbUpdateConcurrencyException)
         {
             await dbTransaction.RollbackAsync(ct);
-            return CreateIssueResult.Failure("Data changed while creating issue document. Please retry.");
+            _dbContext.ChangeTracker.Clear();
+            return CreateIssueResult.Failure("Stock changed while reserving lots for this draft. Please preview again and retry.");
         }
         catch (DbUpdateException)
         {
             await dbTransaction.RollbackAsync(ct);
+            _dbContext.ChangeTracker.Clear();
             return CreateIssueResult.Failure("Issue creation failed due to a database update conflict.");
         }
     }
@@ -318,6 +324,8 @@ public class IssueService : IIssueService
             return PostIssueResult.Failure(authorization.ErrorMessage ?? "Access denied.");
         }
 
+        _dbContext.ChangeTracker.Clear();
+
         await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(ct);
 
         try
@@ -364,7 +372,11 @@ public class IssueService : IIssueService
                 .Where(balance => balance.WarehouseId == issue.WarehouseId && lotIds.Contains(balance.ProductLotId))
                 .ToDictionaryAsync(balance => (balance.ProductId, balance.ProductLotId), ct);
 
-            foreach (StockTransactionLine line in issue.StockTransactionLines.OrderBy(line => line.LineNo))
+            List<StockTransactionLine> orderedLines = issue.StockTransactionLines
+                .OrderBy(line => line.LineNo)
+                .ToList();
+
+            foreach (StockTransactionLine line in orderedLines)
             {
                 if (line.ProductLot.WarehouseId != issue.WarehouseId || line.ProductLot.ProductId != line.ProductId)
                 {
@@ -381,11 +393,16 @@ public class IssueService : IIssueService
                     return PostIssueResult.Failure($"Stock balance not found for line {line.LineNo}.");
                 }
 
-                decimal availableQty = stockBalance.AvailableQty ?? (stockBalance.OnHandQty - stockBalance.AllocatedQty);
-                if (availableQty < line.Qty)
+                if (stockBalance.AllocatedQty < line.Qty)
                 {
                     return PostIssueResult.Failure(
-                        $"Insufficient available quantity for lot '{line.ProductLot.LotCode}'. Please preview allocation again.");
+                        $"Reservation for lot '{line.ProductLot.LotCode}' is no longer sufficient. Please recreate draft issue.");
+                }
+
+                if (stockBalance.OnHandQty < line.Qty)
+                {
+                    return PostIssueResult.Failure(
+                        $"Insufficient on-hand quantity for lot '{line.ProductLot.LotCode}'. Please recreate draft issue.");
                 }
 
                 if (line.ProductLot.RemainingQty < line.Qty)
@@ -393,11 +410,20 @@ public class IssueService : IIssueService
                     return PostIssueResult.Failure(
                         $"Lot '{line.ProductLot.LotCode}' no longer has enough remaining quantity. Please preview allocation again.");
                 }
+            }
 
+            foreach (StockTransactionLine line in orderedLines)
+            {
+                StockBalance stockBalance = stockBalanceMap[(line.ProductId, line.ProductLotId)];
                 stockBalance.OnHandQty -= line.Qty;
                 if (stockBalance.OnHandQty < 0)
                 {
                     stockBalance.OnHandQty = 0;
+                }
+                stockBalance.AllocatedQty -= line.Qty;
+                if (stockBalance.AllocatedQty < 0)
+                {
+                    stockBalance.AllocatedQty = 0;
                 }
                 stockBalance.LastMovementAt = now;
                 stockBalance.UpdatedAt = now;
@@ -446,12 +472,136 @@ public class IssueService : IIssueService
         catch (DbUpdateConcurrencyException)
         {
             await dbTransaction.RollbackAsync(ct);
+            _dbContext.ChangeTracker.Clear();
             return PostIssueResult.Failure("Posting failed because data was modified by another user. Please refresh and retry.");
         }
         catch (DbUpdateException)
         {
             await dbTransaction.RollbackAsync(ct);
+            _dbContext.ChangeTracker.Clear();
             return PostIssueResult.Failure("Posting failed due to a database update conflict.");
+        }
+    }
+
+    public async Task<CancelIssueResult> CancelDraftIssueAsync(long transactionId, int actorUserId, CancellationToken ct)
+    {
+        OperationResult authorization = await EnsureRoleAsync(actorUserId, ManagerRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            return CancelIssueResult.Failure(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        _dbContext.ChangeTracker.Clear();
+
+        await using var dbTransaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
+        try
+        {
+            StockTransaction? issue = await _dbContext.StockTransactions
+                .Include(transaction => transaction.StockTransactionLines)
+                .FirstOrDefaultAsync(transaction => transaction.TransactionId == transactionId, ct);
+
+            if (issue is null)
+            {
+                return CancelIssueResult.Failure("Issue document not found.");
+            }
+
+            if (!string.Equals(issue.TransactionType, IssueTransactionType, StringComparison.OrdinalIgnoreCase))
+            {
+                return CancelIssueResult.Failure("Selected document is not an issue transaction.");
+            }
+
+            if (string.Equals(issue.DocumentStatus, DocumentStatusCancelled, StringComparison.OrdinalIgnoreCase))
+            {
+                return CancelIssueResult.Success(issue.TransactionId, issue.TransactionNo, issue.UpdatedAt ?? DateTime.UtcNow);
+            }
+
+            if (!string.Equals(issue.DocumentStatus, DocumentStatusDraft, StringComparison.OrdinalIgnoreCase))
+            {
+                return CancelIssueResult.Failure($"Issue must be in {DocumentStatusDraft} status before cancellation.");
+            }
+
+            DateTime now = DateTime.UtcNow;
+
+            if (issue.StockTransactionLines.Count > 0)
+            {
+                IReadOnlyCollection<long> lotIds = issue.StockTransactionLines
+                    .Select(line => line.ProductLotId)
+                    .Distinct()
+                    .ToArray();
+
+                Dictionary<(int ProductId, long ProductLotId), StockBalance> stockBalanceMap = await _dbContext.StockBalances
+                    .Where(balance => balance.WarehouseId == issue.WarehouseId && lotIds.Contains(balance.ProductLotId))
+                    .ToDictionaryAsync(balance => (balance.ProductId, balance.ProductLotId), ct);
+
+                List<StockTransactionLine> orderedLines = issue.StockTransactionLines
+                    .OrderBy(line => line.LineNo)
+                    .ToList();
+
+                foreach (StockTransactionLine line in orderedLines)
+                {
+                    if (!stockBalanceMap.TryGetValue((line.ProductId, line.ProductLotId), out StockBalance? stockBalance))
+                    {
+                        return CancelIssueResult.Failure($"Stock balance not found for line {line.LineNo}.");
+                    }
+
+                    if (stockBalance.AllocatedQty < line.Qty)
+                    {
+                        return CancelIssueResult.Failure(
+                            $"Reserved quantity for lot id {line.ProductLotId} is inconsistent. Cannot cancel safely.");
+                    }
+                }
+
+                foreach (StockTransactionLine line in orderedLines)
+                {
+                    StockBalance stockBalance = stockBalanceMap[(line.ProductId, line.ProductLotId)];
+                    stockBalance.AllocatedQty -= line.Qty;
+                    if (stockBalance.AllocatedQty < 0)
+                    {
+                        stockBalance.AllocatedQty = 0;
+                    }
+                    stockBalance.UpdatedAt = now;
+                }
+            }
+
+            issue.DocumentStatus = DocumentStatusCancelled;
+            issue.PostedByUserId = null;
+            issue.PostedAt = null;
+            issue.UpdatedAt = now;
+
+            await _dbContext.SaveChangesAsync(ct);
+            await dbTransaction.CommitAsync(ct);
+
+            await _auditLogService.LogAsync(
+                actionType: "CANCEL_ISSUE",
+                entityName: "StockTransactions",
+                entityId: issue.TransactionId.ToString(),
+                userId: actorUserId,
+                isSuccess: true,
+                severity: "INFO",
+                details: new
+                {
+                    issue.TransactionNo,
+                    issue.WarehouseId,
+                    LineCount = issue.StockTransactionLines.Count
+                },
+                clientIp: null,
+                clientApp: "WPF-Client",
+                ct: ct);
+
+            return CancelIssueResult.Success(issue.TransactionId, issue.TransactionNo, now);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            await dbTransaction.RollbackAsync(ct);
+            _dbContext.ChangeTracker.Clear();
+            return CancelIssueResult.Failure("Cancellation failed because data was modified by another user. Please refresh and retry.");
+        }
+        catch (DbUpdateException)
+        {
+            await dbTransaction.RollbackAsync(ct);
+            _dbContext.ChangeTracker.Clear();
+            return CancelIssueResult.Failure("Cancellation failed due to a database update conflict.");
         }
     }
 
@@ -606,6 +756,178 @@ public class IssueService : IIssueService
         return AllocationComputation.Success(allocations, totalCogs, totalSales);
     }
 
+    private async Task<AllocationComputation> ComputeAllocationForReservationAsync(
+        IssueRequestDto request,
+        DateTime reservedAtUtc,
+        CancellationToken ct)
+    {
+        if (request is null)
+        {
+            return AllocationComputation.Failure("Issue request payload is required.");
+        }
+
+        if (request.WarehouseId <= 0)
+        {
+            return AllocationComputation.Failure("Warehouse is required.");
+        }
+
+        bool warehouseExists = await _dbContext.Warehouses
+            .AsNoTracking()
+            .AnyAsync(warehouse => warehouse.WarehouseId == request.WarehouseId && warehouse.IsActive, ct);
+        if (!warehouseExists)
+        {
+            return AllocationComputation.Failure("Selected warehouse is invalid or inactive.");
+        }
+
+        NormalizedLineResult normalizedLineResult = NormalizeLines(request.Lines);
+        if (!normalizedLineResult.IsSuccess)
+        {
+            return AllocationComputation.Failure(normalizedLineResult.ErrorMessage ?? "Issue lines are invalid.");
+        }
+
+        List<NormalizedRequestLine> requestedLines = normalizedLineResult.Lines;
+        List<int> productIds = requestedLines.Select(line => line.ProductId).ToList();
+
+        Dictionary<int, ProductLookupDto> productMap = await _dbContext.Products
+            .AsNoTracking()
+            .Where(product => product.IsActive && productIds.Contains(product.ProductId))
+            .Select(product => new ProductLookupDto
+            {
+                ProductId = product.ProductId,
+                Sku = product.Sku,
+                ProductName = product.ProductName,
+                BaseUom = product.BaseUom
+            })
+            .ToDictionaryAsync(product => product.ProductId, ct);
+
+        if (productMap.Count != productIds.Count)
+        {
+            return AllocationComputation.Failure("One or more selected products are invalid or inactive.");
+        }
+
+        DateOnly transactionDate = DateOnly.FromDateTime((request.TransactionDate == default ? DateTime.UtcNow : request.TransactionDate).Date);
+
+        List<ReservableLotSnapshot> lotSnapshots = await _dbContext.StockBalances
+            .Include(balance => balance.ProductLot)
+            .Where(balance => balance.WarehouseId == request.WarehouseId && productIds.Contains(balance.ProductId))
+            .Select(balance => new ReservableLotSnapshot
+            {
+                StockBalance = balance,
+                ProductId = balance.ProductId,
+                ProductLotId = balance.ProductLotId,
+                LotCode = balance.ProductLot.LotCode,
+                ReceivedDate = balance.ProductLot.ReceivedDate,
+                ExpiryDate = balance.ProductLot.ExpiryDate,
+                UnitCost = balance.ProductLot.UnitCost,
+                LotStatus = balance.ProductLot.Status,
+                AvailableQty = balance.OnHandQty - balance.AllocatedQty
+            })
+            .Where(snapshot => snapshot.AvailableQty > 0 && snapshot.LotStatus != "LOCKED")
+            .ToListAsync(ct);
+
+        List<IssueAllocationPreviewItemDto> allocations = [];
+        List<IssueAllocationShortageDto> shortages = [];
+
+        foreach (NormalizedRequestLine requestedLine in requestedLines)
+        {
+            ProductLookupDto product = productMap[requestedLine.ProductId];
+
+            List<ReservableLotSnapshot> eligibleLots = lotSnapshots
+                .Where(snapshot =>
+                    snapshot.ProductId == requestedLine.ProductId &&
+                    (!snapshot.ExpiryDate.HasValue || snapshot.ExpiryDate.Value >= transactionDate))
+                .OrderBy(snapshot => snapshot.ExpiryDate.HasValue ? 0 : 1)
+                .ThenBy(snapshot => snapshot.ExpiryDate ?? DateOnly.MaxValue)
+                .ThenBy(snapshot => snapshot.ReceivedDate)
+                .ThenBy(snapshot => snapshot.ProductLotId)
+                .ToList();
+
+            decimal availableTotal = eligibleLots.Sum(snapshot => snapshot.AvailableQty);
+            decimal remainingQty = requestedLine.Qty;
+
+            foreach (ReservableLotSnapshot lot in eligibleLots)
+            {
+                if (remainingQty <= 0)
+                {
+                    break;
+                }
+
+                decimal availableBeforeAllocation = lot.AvailableQty;
+                decimal allocatedQty = Math.Min(remainingQty, availableBeforeAllocation);
+                if (allocatedQty <= 0)
+                {
+                    continue;
+                }
+
+                decimal cogsAmount = RoundMoney(allocatedQty * lot.UnitCost);
+                decimal lineAmount = RoundMoney(allocatedQty * (requestedLine.UnitPrice ?? lot.UnitCost));
+
+                allocations.Add(new IssueAllocationPreviewItemDto
+                {
+                    ProductId = product.ProductId,
+                    Sku = product.Sku,
+                    ProductName = product.ProductName,
+                    ProductLotId = lot.ProductLotId,
+                    LotCode = lot.LotCode,
+                    ReceivedDate = lot.ReceivedDate,
+                    ExpiryDate = lot.ExpiryDate,
+                    AvailableQtyBeforeAllocation = availableBeforeAllocation,
+                    AllocatedQty = allocatedQty,
+                    UnitCost = lot.UnitCost,
+                    UnitPrice = requestedLine.UnitPrice,
+                    CogsAmount = cogsAmount,
+                    LineAmount = lineAmount,
+                    AllocationRule = lot.ExpiryDate.HasValue ? "FEFO" : "FIFO"
+                });
+
+                lot.AvailableQty -= allocatedQty;
+                remainingQty -= allocatedQty;
+            }
+
+            if (remainingQty > 0)
+            {
+                shortages.Add(new IssueAllocationShortageDto
+                {
+                    ProductId = product.ProductId,
+                    Sku = product.Sku,
+                    ProductName = product.ProductName,
+                    RequestedQty = requestedLine.Qty,
+                    AvailableQty = availableTotal
+                });
+            }
+        }
+
+        decimal totalCogs = allocations.Sum(allocation => allocation.CogsAmount);
+        decimal totalSales = allocations.Sum(allocation => allocation.LineAmount);
+
+        if (shortages.Count > 0)
+        {
+            return AllocationComputation.Failure(
+                "Insufficient available stock for one or more products.",
+                allocations,
+                shortages,
+                totalCogs,
+                totalSales);
+        }
+
+        Dictionary<(int ProductId, long ProductLotId), StockBalance> reservableStockBalanceMap = lotSnapshots
+            .ToDictionary(snapshot => (snapshot.ProductId, snapshot.ProductLotId), snapshot => snapshot.StockBalance);
+
+        foreach (IssueAllocationPreviewItemDto allocation in allocations)
+        {
+            if (!reservableStockBalanceMap.TryGetValue((allocation.ProductId, allocation.ProductLotId), out StockBalance? stockBalance))
+            {
+                return AllocationComputation.Failure(
+                    $"Stock balance not found while reserving lot '{allocation.LotCode}'.");
+            }
+
+            stockBalance.AllocatedQty = decimal.Round(stockBalance.AllocatedQty + allocation.AllocatedQty, 3);
+            stockBalance.UpdatedAt = reservedAtUtc;
+        }
+
+        return AllocationComputation.Success(allocations, totalCogs, totalSales);
+    }
+
     private async Task<string> GenerateIssueTransactionNoAsync(DateTime transactionDate, CancellationToken ct)
     {
         string dateToken = transactionDate.ToString("yyyyMMdd");
@@ -732,6 +1054,27 @@ public class IssueService : IIssueService
         public decimal UnitCost { get; init; }
 
         public decimal AvailableQty { get; init; }
+
+        public string LotStatus { get; init; } = string.Empty;
+    }
+
+    private sealed class ReservableLotSnapshot
+    {
+        public required StockBalance StockBalance { get; init; }
+
+        public int ProductId { get; init; }
+
+        public long ProductLotId { get; init; }
+
+        public string LotCode { get; init; } = string.Empty;
+
+        public DateOnly ReceivedDate { get; init; }
+
+        public DateOnly? ExpiryDate { get; init; }
+
+        public decimal UnitCost { get; init; }
+
+        public decimal AvailableQty { get; set; }
 
         public string LotStatus { get; init; } = string.Empty;
     }

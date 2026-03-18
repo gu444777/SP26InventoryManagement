@@ -21,4 +21,6 @@ public interface IIssueService
     Task<IReadOnlyList<DraftIssueLineDto>> GetDraftIssueLinesAsync(long transactionId, CancellationToken ct);
 
     Task<PostIssueResult> PostIssueAsync(long transactionId, int actorUserId, CancellationToken ct);
+
+    Task<CancelIssueResult> CancelDraftIssueAsync(long transactionId, int actorUserId, CancellationToken ct);
 }

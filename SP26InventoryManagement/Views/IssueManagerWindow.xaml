@@ -1,0 +1,145 @@
+<Window x:Class="SP26InventoryManagement.IssueManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Issue Management - Manager"
+        Height="760"
+        Width="1320"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Issue Management - Manager"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6" />
+                <TextBlock Text="{Binding PermissionSummary}"
+                           Foreground="#444444" />
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="Crimson"
+                           Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <DockPanel Grid.Row="0"
+                           Grid.ColumnSpan="2"
+                           Margin="0,0,0,8">
+                    <TextBlock Text="Post Issue"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               DockPanel.Dock="Left" />
+                    <StackPanel Orientation="Horizontal"
+                                DockPanel.Dock="Right">
+                        <Button Content="Refresh Drafts"
+                                Command="{Binding RefreshDraftIssuesCommand}"
+                                Width="120"
+                                Margin="0,0,8,0" />
+                        <Button Content="Post Selected Issue"
+                                Command="{Binding PostIssueCommand}"
+                                Width="140" />
+                    </StackPanel>
+                </DockPanel>
+
+                <DataGrid Grid.Row="1"
+                          Grid.Column="0"
+                          ItemsSource="{Binding DraftIssues}"
+                          SelectedItem="{Binding SelectedDraftIssue}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="0,0,8,0"
+                          SelectionMode="Single"
+                          SelectionUnit="FullRow">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Doc No"
+                                            Binding="{Binding TransactionNo}"
+                                            Width="150" />
+                        <DataGridTextColumn Header="Warehouse"
+                                            Binding="{Binding WarehouseName}"
+                                            Width="160" />
+                        <DataGridTextColumn Header="Customer"
+                                            Binding="{Binding CustomerName}"
+                                            Width="160" />
+                        <DataGridTextColumn Header="Date"
+                                            Binding="{Binding TransactionDate, StringFormat=yyyy-MM-dd}"
+                                            Width="100" />
+                        <DataGridTextColumn Header="Created By"
+                                            Binding="{Binding CreatedBy}"
+                                            Width="120" />
+                        <DataGridTextColumn Header="Created At"
+                                            Binding="{Binding CreatedAt, StringFormat=yyyy-MM-dd HH:mm}"
+                                            Width="140" />
+                        <DataGridTextColumn Header="Amount"
+                                            Binding="{Binding TotalAmount, StringFormat=N2}"
+                                            Width="120" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <DataGrid Grid.Row="1"
+                          Grid.Column="1"
+                          ItemsSource="{Binding DraftIssueLines}"
+                          AutoGenerateColumns="False"
+                          IsReadOnly="True"
+                          CanUserAddRows="False"
+                          Margin="8,0,0,0">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="#"
+                                            Binding="{Binding LineNo}"
+                                            Width="40" />
+                        <DataGridTextColumn Header="SKU"
+                                            Binding="{Binding Sku}"
+                                            Width="110" />
+                        <DataGridTextColumn Header="Product"
+                                            Binding="{Binding ProductName}"
+                                            Width="170" />
+                        <DataGridTextColumn Header="Lot"
+                                            Binding="{Binding LotCode}"
+                                            Width="90" />
+                        <DataGridTextColumn Header="Qty"
+                                            Binding="{Binding Qty, StringFormat=N3}"
+                                            Width="80" />
+                        <DataGridTextColumn Header="Unit Cost"
+                                            Binding="{Binding UnitCost, StringFormat=N4}"
+                                            Width="90" />
+                        <DataGridTextColumn Header="Unit Price"
+                                            Binding="{Binding UnitPrice, StringFormat=N4}"
+                                            Width="90" />
+                        <DataGridTextColumn Header="COGS"
+                                            Binding="{Binding CogsAmount, StringFormat=N2}"
+                                            Width="90" />
+                        <DataGridTextColumn Header="Expiry"
+                                            Binding="{Binding ExpiryDisplay}"
+                                            Width="90" />
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

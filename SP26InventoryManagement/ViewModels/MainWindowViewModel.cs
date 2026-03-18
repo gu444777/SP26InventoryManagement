@@ -23,6 +23,7 @@ public class MainWindowViewModel : ObservableObject
         _currentUserContext = currentUserContext;
         _userDialogService = userDialogService;
         _messageService = messageService;
+
         _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, CanOpenChangePassword);
         _logoutCommand = new AsyncRelayCommand(LogoutAsync, CanLogout);
     }
@@ -32,6 +33,10 @@ public class MainWindowViewModel : ObservableObject
     public string Username => _currentUserContext.Username;
 
     public string FullName => _currentUserContext.FullName;
+
+    public string RolesDisplay => _currentUserContext.RoleCodes.Count == 0
+        ? "No roles"
+        : string.Join(", ", _currentUserContext.RoleCodes.OrderBy(roleCode => roleCode, StringComparer.OrdinalIgnoreCase));
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 

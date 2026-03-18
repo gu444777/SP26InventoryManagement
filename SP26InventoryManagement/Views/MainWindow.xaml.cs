@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Windows;
 using System.Windows.Threading;
+using Microsoft.Extensions.DependencyInjection;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.ViewModels;
 
@@ -8,6 +9,10 @@ namespace SP26InventoryManagement
 {
     public partial class MainWindow : Window
     {
+        private const string StaffRoleCode = "WAREHOUSE_STAFF";
+        private const string ManagerRoleCode = "MANAGER";
+        private const string AdminRoleCode = "ADMIN";
+
         private readonly CurrentUserContext _currentUserContext;
         private readonly DispatcherTimer _sessionMonitorTimer;
         private bool _isNavigatingToLogin;
@@ -33,6 +38,68 @@ namespace SP26InventoryManagement
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             _sessionMonitorTimer.Start();
+        }
+
+        private void OpenIssueStaffButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode)
+                                      || _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenStaffWindow)
+            {
+                MessageBox.Show(
+                    "Only WAREHOUSE_STAFF or ADMIN can open Issue Staff screen.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<IssueStaffWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenIssueManagerButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenManagerWindow = _currentUserContext.IsInRole(ManagerRoleCode)
+                                        || _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenManagerWindow)
+            {
+                MessageBox.Show(
+                    "Only MANAGER or ADMIN can open Issue Manager screen.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<IssueManagerWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
         }
 
         private void OnClosed(object? sender, EventArgs e)

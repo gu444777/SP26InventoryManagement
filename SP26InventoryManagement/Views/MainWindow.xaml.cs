@@ -1,8 +1,9 @@
-﻿using System;
+﻿using SP26InventoryManagement.Infrastructure;
+using SP26InventoryManagement.ViewModels;
+using SP26InventoryManagement.Views;
+using System;
 using System.Windows;
 using System.Windows.Threading;
-using SP26InventoryManagement.Infrastructure;
-using SP26InventoryManagement.ViewModels;
 
 namespace SP26InventoryManagement
 {
@@ -73,5 +74,7 @@ namespace SP26InventoryManagement
                 app.NavigateToLoginAfterLogout(this);
             }
         }
+
+       
     }
 }

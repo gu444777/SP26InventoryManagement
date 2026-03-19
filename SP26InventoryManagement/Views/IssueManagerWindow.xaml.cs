@@ -5,33 +5,46 @@ using SP26InventoryManagement.ViewModels;
 
 namespace SP26InventoryManagement;
 
-public partial class AdminUserManagementWindow : Window
+public partial class IssueManagerWindow : Window
 {
     private readonly CurrentUserContext _currentUserContext;
     private readonly DispatcherTimer _sessionMonitorTimer;
     private bool _isNavigatingToLogin;
 
-    public AdminUserManagementWindow(AdminUserManagementViewModel viewModel, CurrentUserContext currentUserContext)
+    public IssueManagerWindow(IssueManagementViewModel viewModel, CurrentUserContext currentUserContext)
     {
         InitializeComponent();
         ViewModel = viewModel;
         _currentUserContext = currentUserContext;
         DataContext = viewModel;
-        Loaded += OnLoaded;
-        Closed += OnClosed;
-        ViewModel.LogoutRequested += OnLogoutRequested;
+
         _sessionMonitorTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromSeconds(15)
         };
         _sessionMonitorTimer.Tick += OnSessionMonitorTick;
+
+        Loaded += OnLoaded;
+        Closed += OnClosed;
+        ViewModel.LogoutRequested += OnLogoutRequested;
     }
 
-    public AdminUserManagementViewModel ViewModel { get; }
+    public IssueManagementViewModel ViewModel { get; }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
+
+        if (!ViewModel.HasPostIssuePermission)
+        {
+            MessageBox.Show(
+                "Only MANAGER or ADMIN can open this screen.",
+                "Access Denied",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            Close();
+            return;
+        }
 
         try
         {
@@ -41,7 +54,7 @@ public partial class AdminUserManagementWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"Failed to initialize Admin User Management screen.\n\n{ex.Message}",
+                $"Failed to initialize Issue Manager screen.\n\n{ex.Message}",
                 "Initialization Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
@@ -60,7 +73,7 @@ public partial class AdminUserManagementWindow : Window
 
     private void OnSessionMonitorTick(object? sender, EventArgs e)
     {
-        if (_isNavigatingToLogin || _currentUserContext.IsAuthenticated)
+        if (_currentUserContext.IsAuthenticated)
         {
             return;
         }
@@ -83,17 +96,9 @@ public partial class AdminUserManagementWindow : Window
         _isNavigatingToLogin = true;
         _sessionMonitorTimer.Stop();
 
-        if (Owner is MainWindow ownerMainWindow && Application.Current is App ownerApp)
+        if (Owner is MainWindow ownerMainWindow && Application.Current is App app)
         {
-            ownerApp.NavigateToLoginAfterLogout(ownerMainWindow);
-            Close();
-            return;
-        }
-
-        if (Application.Current is App app)
-        {
-            app.NavigateToLoginAfterLogout(this);
-            return;
+            app.NavigateToLoginAfterLogout(ownerMainWindow);
         }
 
         Close();

@@ -13,8 +13,6 @@ namespace SP26InventoryManagement
 {
     public partial class App : Application
     {
-        private const string AdminRoleCode = "ADMIN";
-
         public IServiceProvider Services { get; private set; } = null!;
 
         protected override void OnStartup(StartupEventArgs e)
@@ -94,11 +92,13 @@ namespace SP26InventoryManagement
             services.AddTransient<IUserManagementService, UserManagementService>();
             services.AddTransient<ISessionValidationService, SessionValidationService>();
             services.AddTransient<IAuditLogService, AuditLogService>();
+            services.AddTransient<IIssueService, IssueService>();
             services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
             services.AddSingleton<IMessageService, MessageService>();
             services.AddSingleton<IUserDialogService, UserDialogService>();
 
             services.AddTransient<LoginViewModel>();
+            services.AddTransient<IssueManagementViewModel>();
             services.AddTransient<MainWindowViewModel>();
             services.AddTransient<AdminUserManagementViewModel>();
             services.AddTransient<CreateUserViewModel>();
@@ -106,6 +106,8 @@ namespace SP26InventoryManagement
 
             services.AddTransient<LoginWindow>();
             services.AddTransient<MainWindow>();
+            services.AddTransient<IssueStaffWindow>();
+            services.AddTransient<IssueManagerWindow>();
             services.AddTransient<AdminUserManagementWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
@@ -144,9 +146,7 @@ namespace SP26InventoryManagement
 
             try
             {
-                Window startWindow = currentUser.IsInRole(AdminRoleCode)
-                    ? Services.GetRequiredService<AdminUserManagementWindow>()
-                    : Services.GetRequiredService<MainWindow>();
+                Window startWindow = Services.GetRequiredService<MainWindow>();
 
                 MainWindow = startWindow;
                 ShutdownMode = ShutdownMode.OnMainWindowClose;

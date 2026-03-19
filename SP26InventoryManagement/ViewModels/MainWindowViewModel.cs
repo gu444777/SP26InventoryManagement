@@ -6,6 +6,10 @@ namespace SP26InventoryManagement.ViewModels;
 
 public class MainWindowViewModel : ObservableObject
 {
+    private const string StaffRoleCode = "WAREHOUSE_STAFF";
+    private const string ManagerRoleCode = "MANAGER";
+    private const string AdminRoleCode = "ADMIN";
+
     private readonly IAuthService _authService;
     private readonly CurrentUserContext _currentUserContext;
     private readonly IUserDialogService _userDialogService;
@@ -23,6 +27,7 @@ public class MainWindowViewModel : ObservableObject
         _currentUserContext = currentUserContext;
         _userDialogService = userDialogService;
         _messageService = messageService;
+
         _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, CanOpenChangePassword);
         _logoutCommand = new AsyncRelayCommand(LogoutAsync, CanLogout);
     }
@@ -32,6 +37,16 @@ public class MainWindowViewModel : ObservableObject
     public string Username => _currentUserContext.Username;
 
     public string FullName => _currentUserContext.FullName;
+
+    public string RolesDisplay => _currentUserContext.RoleCodes.Count == 0
+        ? "No roles"
+        : string.Join(", ", _currentUserContext.RoleCodes.OrderBy(roleCode => roleCode, StringComparer.OrdinalIgnoreCase));
+
+    public bool CanManageUsers => _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanOpenIssueStaff => _currentUserContext.IsInRole(StaffRoleCode);
+
+    public bool CanOpenIssueManager => _currentUserContext.IsInRole(ManagerRoleCode);
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 

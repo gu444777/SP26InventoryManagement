@@ -1,5 +1,4 @@
-﻿using System.Windows;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SP26InventoryManagement.Infrastructure;
@@ -7,6 +6,8 @@ using SP26InventoryManagement.Models;
 using SP26InventoryManagement.Repositories;
 using SP26InventoryManagement.Services;
 using SP26InventoryManagement.ViewModels;
+using SP26InventoryManagement.Views;
+using System.Windows;
 
 namespace SP26InventoryManagement
 {
@@ -19,6 +20,15 @@ namespace SP26InventoryManagement
             base.OnStartup(e);
 
             Services = ConfigureServices();
+
+            // 🔥 TEST MODE (đơn giản nhất)
+           // var window = Services.GetRequiredService<SupplierView>();
+            //MainWindow = window;
+            //ShutdownMode = ShutdownMode.OnMainWindowClose;
+            //window.Show();
+            //return;
+
+            // 👇 code cũ giữ nguyên bên dưới (không chạy khi test)
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             if (!ShowLoginAndOpenStartWindow())
@@ -101,6 +111,14 @@ namespace SP26InventoryManagement
             services.AddTransient<AdminUserManagementWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
+            services.AddTransient<ISupplierService, SupplierService>();
+          
+            services.AddTransient<SupplierViewModel>();
+
+
+            //tesss
+            services.AddTransient<SupplierView>();
+            services.AddTransient<SupplierViewModel>();
 
             return services.BuildServiceProvider();
         }

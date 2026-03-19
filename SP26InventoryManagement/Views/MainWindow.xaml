@@ -8,6 +8,10 @@
         Height="420"
         Width="860"
         WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+
     <DockPanel Margin="16">
         <StackPanel DockPanel.Dock="Top"
                     Orientation="Horizontal"
@@ -64,14 +68,22 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,10" />
                     <WrapPanel>
+                        <Button Content="Manage User"
+                                Width="150"
+                                Height="38"
+                                Margin="0,0,10,0"
+                                Visibility="{Binding CanManageUsers, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Click="OpenManageUserButton_OnClick" />
                         <Button Content="Open Issue (Staff)"
                                 Width="170"
                                 Height="38"
                                 Margin="0,0,10,0"
+                                Visibility="{Binding CanOpenIssueStaff, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenIssueStaffButton_OnClick" />
                         <Button Content="Open Issue (Manager)"
                                 Width="190"
                                 Height="38"
+                                Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenIssueManagerButton_OnClick" />
                     </WrapPanel>
                 </StackPanel>

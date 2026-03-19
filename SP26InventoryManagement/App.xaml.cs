@@ -12,8 +12,6 @@ namespace SP26InventoryManagement
 {
     public partial class App : Application
     {
-        private const string AdminRoleCode = "ADMIN";
-
         public IServiceProvider Services { get; private set; } = null!;
 
         protected override void OnStartup(StartupEventArgs e)
@@ -130,9 +128,7 @@ namespace SP26InventoryManagement
 
             try
             {
-                Window startWindow = currentUser.IsInRole(AdminRoleCode)
-                    ? Services.GetRequiredService<AdminUserManagementWindow>()
-                    : Services.GetRequiredService<MainWindow>();
+                Window startWindow = Services.GetRequiredService<MainWindow>();
 
                 MainWindow = startWindow;
                 ShutdownMode = ShutdownMode.OnMainWindowClose;

@@ -48,12 +48,11 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode)
-                                      || _currentUserContext.IsInRole(AdminRoleCode);
+            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode);
             if (!canOpenStaffWindow)
             {
                 MessageBox.Show(
-                    "Only WAREHOUSE_STAFF or ADMIN can open Issue Staff screen.",
+                    "Only WAREHOUSE_STAFF can open Issue Staff screen.",
                     "Access Denied",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -71,6 +70,36 @@ namespace SP26InventoryManagement
             window.Activate();
         }
 
+        private void OpenManageUserButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenAdminWindow = _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenAdminWindow)
+            {
+                MessageBox.Show(
+                    "Only ADMIN can open User Management screen.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<AdminUserManagementWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
         private void OpenIssueManagerButton_OnClick(object sender, RoutedEventArgs e)
         {
             if (!_currentUserContext.IsAuthenticated)
@@ -79,12 +108,11 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            bool canOpenManagerWindow = _currentUserContext.IsInRole(ManagerRoleCode)
-                                        || _currentUserContext.IsInRole(AdminRoleCode);
+            bool canOpenManagerWindow = _currentUserContext.IsInRole(ManagerRoleCode);
             if (!canOpenManagerWindow)
             {
                 MessageBox.Show(
-                    "Only MANAGER or ADMIN can open Issue Manager screen.",
+                    "Only MANAGER can open Issue Manager screen.",
                     "Access Denied",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);

@@ -65,7 +65,7 @@ public partial class AdminUserManagementWindow : Window
             return;
         }
 
-        NavigateToLogin();
+        Close();
     }
 
     private void OnLogoutRequested()
@@ -80,11 +80,22 @@ public partial class AdminUserManagementWindow : Window
             return;
         }
 
+        _isNavigatingToLogin = true;
+        _sessionMonitorTimer.Stop();
+
+        if (Owner is MainWindow ownerMainWindow && Application.Current is App ownerApp)
+        {
+            ownerApp.NavigateToLoginAfterLogout(ownerMainWindow);
+            Close();
+            return;
+        }
+
         if (Application.Current is App app)
         {
-            _isNavigatingToLogin = true;
-            _sessionMonitorTimer.Stop();
             app.NavigateToLoginAfterLogout(this);
+            return;
         }
+
+        Close();
     }
 }

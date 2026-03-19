@@ -97,14 +97,6 @@
                                 Command="{Binding ReactivateUserCommand}"
                                 Height="32"
                                 Margin="0,0,0,12" />
-                        <Button Content="Change My Password"
-                                Command="{Binding OpenChangePasswordCommand}"
-                                Height="32"
-                                Margin="0,0,0,12" />
-                        <Button Content="Logout"
-                                Command="{Binding LogoutCommand}"
-                                Height="32"
-                                Margin="0,0,0,12" />
                         <Button Content="Save Role Changes"
                                 Command="{Binding SaveRolesCommand}"
                                 Height="32"

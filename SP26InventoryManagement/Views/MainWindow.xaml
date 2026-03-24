@@ -39,6 +39,18 @@
                            Margin="0,0,0,8" />
                 <TextBlock Text="{Binding Username, StringFormat='Username: {0}'}"
                            FontSize="16" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
+                    <Button Content="Manage Customers"
+                            Command="{Binding OpenManageCustomersCommand}"
+                            MinWidth="160"
+                            Padding="12,8"
+                            Margin="0,0,12,0" />
+                    <Button Content="Manage Suppliers"
+                            Command="{Binding OpenManageSuppliersCommand}"
+                            MinWidth="160"
+                            Padding="12,8" />
+                </StackPanel>
             </StackPanel>
         </Border>
     </DockPanel>

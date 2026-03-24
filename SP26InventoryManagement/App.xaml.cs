@@ -5,6 +5,7 @@ using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Models;
 using SP26InventoryManagement.Repositories;
 using SP26InventoryManagement.Services;
+using SP26InventoryManagement.Services.Interfaces;
 using SP26InventoryManagement.ViewModels;
 using SP26InventoryManagement.Views;
 using System.Windows;
@@ -110,13 +111,15 @@ namespace SP26InventoryManagement
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
             services.AddTransient<ISupplierService, SupplierService>();
+            services.AddTransient<ICustomerService, CustomerService>();
           
             services.AddTransient<SupplierViewModel>();
+            services.AddTransient<CustomerViewModel>();
 
 
             //tesss
             services.AddTransient<SupplierView>();
-            services.AddTransient<SupplierViewModel>();
+            services.AddTransient<CustomerView>();
 
             return services.BuildServiceProvider();
         }

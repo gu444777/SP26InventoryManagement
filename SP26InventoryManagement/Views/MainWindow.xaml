@@ -70,23 +70,55 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,10" />
                     <WrapPanel>
+
+                        <Button Content="Manage Customers"
+            Width="160"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanManageMasterData, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Command="{Binding OpenManageCustomersCommand}" />
+
+                        <Button Content="Manage Suppliers"
+            Width="160"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanManageMasterData, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Command="{Binding OpenManageSuppliersCommand}" />
+
                         <Button Content="Manage User"
-                                Width="150"
-                                Height="38"
-                                Margin="0,0,10,0"
-                                Visibility="{Binding CanManageUsers, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                Click="OpenManageUserButton_OnClick" />
+            Width="150"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanManageUsers, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenManageUserButton_OnClick" />
+
                         <Button Content="Open Issue (Staff)"
-                                Width="170"
-                                Height="38"
-                                Margin="0,0,10,0"
-                                Visibility="{Binding CanOpenIssueStaff, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                Click="OpenIssueStaffButton_OnClick" />
+            Width="170"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanOpenIssueStaff, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenIssueStaffButton_OnClick" />
+
                         <Button Content="Open Issue (Manager)"
-                                Width="190"
-                                Height="38"
-                                Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                Click="OpenIssueManagerButton_OnClick" />
+            Width="190"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenIssueManagerButton_OnClick" />
+
+                        <Button Content="Open Receipt (Staff)"
+            Width="180"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanOpenReceiptStaff, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenReceiptStaffButton_OnClick" />
+
+                        <Button Content="Open Receipt (Manager)"
+            Width="200"
+            Height="38"
+            Visibility="{Binding CanOpenReceiptManager, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenReceiptManagerButton_OnClick" />
+
                     </WrapPanel>
                 </StackPanel>
             </Border>

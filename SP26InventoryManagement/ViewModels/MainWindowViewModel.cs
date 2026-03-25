@@ -34,6 +34,7 @@ public class MainWindowViewModel : ObservableObject
         _currentUserContext = currentUserContext;
         _userDialogService = userDialogService;
         _messageService = messageService;
+        _serviceProvider = serviceProvider;
 
 
 
@@ -41,6 +42,7 @@ public class MainWindowViewModel : ObservableObject
         _logoutCommand = new AsyncRelayCommand(LogoutAsync, CanLogout);
         _openManageCustomersCommand = new RelayCommand(OpenManageCustomers, CanOpenManageCustomers);
         _openManageSuppliersCommand = new RelayCommand(OpenManageSuppliers, CanOpenManageSuppliers);
+
     }
 
     public event Action? LogoutRequested;
@@ -55,9 +57,18 @@ public class MainWindowViewModel : ObservableObject
 
     public bool CanManageUsers => _currentUserContext.IsInRole(AdminRoleCode);
 
+    public bool CanManageMasterData =>
+        _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
     public bool CanOpenIssueStaff => _currentUserContext.IsInRole(StaffRoleCode);
 
     public bool CanOpenIssueManager => _currentUserContext.IsInRole(ManagerRoleCode);
+
+    public bool CanOpenReceiptStaff =>
+        _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanOpenReceiptManager =>
+        _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 
@@ -79,12 +90,12 @@ public class MainWindowViewModel : ObservableObject
 
     private bool CanOpenManageCustomers()
     {
-        return _currentUserContext.IsAuthenticated;
+        return _currentUserContext.IsAuthenticated && CanManageMasterData;
     }
 
     private bool CanOpenManageSuppliers()
     {
-        return _currentUserContext.IsAuthenticated;
+        return _currentUserContext.IsAuthenticated && CanManageMasterData;
     }
 
     private Task OpenChangePasswordAsync()

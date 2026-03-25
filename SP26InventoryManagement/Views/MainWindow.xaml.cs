@@ -193,6 +193,25 @@ namespace SP26InventoryManagement
             window.Activate();
         }
 
+        private void OpenStockSnapshotButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<StockSnapshotWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
         private void OnClosed(object? sender, EventArgs e)
         {
             _sessionMonitorTimer.Stop();

@@ -116,8 +116,15 @@
                         <Button Content="Open Receipt (Manager)"
             Width="200"
             Height="38"
+            Margin="0,0,10,0"
             Visibility="{Binding CanOpenReceiptManager, Converter={StaticResource BooleanToVisibilityConverter}}"
             Click="OpenReceiptManagerButton_OnClick" />
+
+                        <Button Content="View Stock Snapshot"
+            Width="180"
+            Height="38"
+            Visibility="{Binding CanViewStockSnapshot, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenStockSnapshotButton_OnClick" />
 
                     </WrapPanel>
                 </StackPanel>

@@ -1,0 +1,113 @@
+<Window x:Class="SP26InventoryManagement.StockSnapshotWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Current Stock Snapshot"
+        Height="780"
+        Width="1420"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Current Stock Snapshot"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6" />
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="#444444" />
+
+                <WrapPanel Margin="0,10,0,0">
+                    <StackPanel Width="250" Margin="0,0,10,0">
+                        <TextBlock Text="Warehouse" />
+                        <ComboBox ItemsSource="{Binding WarehouseFilters}"
+                                  SelectedItem="{Binding SelectedWarehouseFilter}"
+                                  Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="300" Margin="0,0,10,0">
+                        <TextBlock Text="Product" />
+                        <ComboBox ItemsSource="{Binding ProductFilters}"
+                                  SelectedItem="{Binding SelectedProductFilter}"
+                                  Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="220" Margin="0,0,10,0">
+                        <TextBlock Text="Search" />
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="150" Margin="0,0,10,0">
+                        <TextBlock Text=" " />
+                        <CheckBox Content="Only Available"
+                                  IsChecked="{Binding OnlyAvailableStock}"
+                                  VerticalAlignment="Center"
+                                  Margin="0,7,0,0" />
+                    </StackPanel>
+                    <StackPanel Width="120">
+                        <TextBlock Text=" " />
+                        <Button Content="Refresh"
+                                Command="{Binding RefreshCommand}"
+                                Height="30" />
+                    </StackPanel>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <DataGrid ItemsSource="{Binding FilteredSnapshots}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Warehouse"
+                                        Binding="{Binding WarehouseDisplay}"
+                                        Width="170" />
+                    <DataGridTextColumn Header="SKU"
+                                        Binding="{Binding Sku}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="Product"
+                                        Binding="{Binding ProductName}"
+                                        Width="190" />
+                    <DataGridTextColumn Header="Lot"
+                                        Binding="{Binding LotCode}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="Received"
+                                        Binding="{Binding ReceivedDate, StringFormat=yyyy-MM-dd}"
+                                        Width="100" />
+                    <DataGridTextColumn Header="Expiry"
+                                        Binding="{Binding ExpiryDisplay}"
+                                        Width="100" />
+                    <DataGridTextColumn Header="Unit Cost"
+                                        Binding="{Binding UnitCost, StringFormat=N4}"
+                                        Width="90" />
+                    <DataGridTextColumn Header="On-Hand"
+                                        Binding="{Binding OnHandQty, StringFormat=N3}"
+                                        Width="90" />
+                    <DataGridTextColumn Header="Allocated"
+                                        Binding="{Binding AllocatedQty, StringFormat=N3}"
+                                        Width="90" />
+                    <DataGridTextColumn Header="Available"
+                                        Binding="{Binding AvailableQty, StringFormat=N3}"
+                                        Width="90" />
+                    <DataGridTextColumn Header="Last Movement"
+                                        Binding="{Binding LastMovementAt, StringFormat=yyyy-MM-dd HH:mm}"
+                                        Width="140" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</Window>

@@ -64,8 +64,7 @@ public class MainWindowViewModel : ObservableObject
 
     public bool CanOpenIssueManager => _currentUserContext.IsInRole(ManagerRoleCode);
 
-    public bool CanOpenReceiptStaff =>
-        _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+    public bool CanOpenReceiptStaff => _currentUserContext.IsInRole(StaffRoleCode);
 
     public bool CanOpenReceiptManager =>
         _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
@@ -75,6 +74,9 @@ public class MainWindowViewModel : ObservableObject
     public bool CanViewStockLedger => _currentUserContext.IsAuthenticated;
 
     public bool CanViewExpiryAlerts => _currentUserContext.IsAuthenticated;
+
+    public bool CanViewGrossProfitReport =>
+        _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
 
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 

@@ -5,6 +5,7 @@ using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Models;
 using SP26InventoryManagement.Repositories;
 using SP26InventoryManagement.Services;
+using SP26InventoryManagement.Services.Interfaces;
 using SP26InventoryManagement.ViewModels;
 using SP26InventoryManagement.Views;
 using System.Windows;
@@ -93,12 +94,16 @@ namespace SP26InventoryManagement
             services.AddTransient<ISessionValidationService, SessionValidationService>();
             services.AddTransient<IAuditLogService, AuditLogService>();
             services.AddTransient<IIssueService, IssueService>();
+            services.AddTransient<IReceiptService, ReceiptService>();
+            services.AddTransient<IStockSnapshotService, StockSnapshotService>();
             services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
             services.AddSingleton<IMessageService, MessageService>();
             services.AddSingleton<IUserDialogService, UserDialogService>();
 
             services.AddTransient<LoginViewModel>();
             services.AddTransient<IssueManagementViewModel>();
+            services.AddTransient<ReceiptManagementViewModel>();
+            services.AddTransient<StockSnapshotViewModel>();
             services.AddTransient<MainWindowViewModel>();
             services.AddTransient<AdminUserManagementViewModel>();
             services.AddTransient<CreateUserViewModel>();
@@ -108,17 +113,22 @@ namespace SP26InventoryManagement
             services.AddTransient<MainWindow>();
             services.AddTransient<IssueStaffWindow>();
             services.AddTransient<IssueManagerWindow>();
+            services.AddTransient<ReceiptStaffWindow>();
+            services.AddTransient<ReceiptManagerWindow>();
+            services.AddTransient<StockSnapshotWindow>();
             services.AddTransient<AdminUserManagementWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
             services.AddTransient<ISupplierService, SupplierService>();
+            services.AddTransient<ICustomerService, CustomerService>();
           
             services.AddTransient<SupplierViewModel>();
+            services.AddTransient<CustomerViewModel>();
 
 
             //tesss
             services.AddTransient<SupplierView>();
-            services.AddTransient<SupplierViewModel>();
+            services.AddTransient<CustomerView>();
 
             return services.BuildServiceProvider();
         }

@@ -96,6 +96,8 @@ namespace SP26InventoryManagement
             services.AddTransient<IIssueService, IssueService>();
             services.AddTransient<IReceiptService, ReceiptService>();
             services.AddTransient<IStockSnapshotService, StockSnapshotService>();
+            services.AddTransient<IStockLedgerService, StockLedgerService>();
+            services.AddTransient<IExpiryAlertService, ExpiryAlertService>();
             services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
             services.AddSingleton<IMessageService, MessageService>();
             services.AddSingleton<IUserDialogService, UserDialogService>();
@@ -104,6 +106,8 @@ namespace SP26InventoryManagement
             services.AddTransient<IssueManagementViewModel>();
             services.AddTransient<ReceiptManagementViewModel>();
             services.AddTransient<StockSnapshotViewModel>();
+            services.AddTransient<StockLedgerViewModel>();
+            services.AddTransient<ExpiryAlertViewModel>();
             services.AddTransient<MainWindowViewModel>();
             services.AddTransient<AdminUserManagementViewModel>();
             services.AddTransient<CreateUserViewModel>();
@@ -116,6 +120,8 @@ namespace SP26InventoryManagement
             services.AddTransient<ReceiptStaffWindow>();
             services.AddTransient<ReceiptManagerWindow>();
             services.AddTransient<StockSnapshotWindow>();
+            services.AddTransient<StockLedgerWindow>();
+            services.AddTransient<ExpiryAlertWindow>();
             services.AddTransient<AdminUserManagementWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();

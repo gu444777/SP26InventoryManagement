@@ -1,0 +1,100 @@
+<Window x:Class="SP26InventoryManagement.ExpiryAlertWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Expiry Alerts"
+        Height="760"
+        Width="1300"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12"
+                Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Expiry Alerts"
+                           FontSize="24"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,6" />
+                <TextBlock Text="Expired and near-expiry lots across warehouses."
+                           Foreground="#444444"
+                           Margin="0,0,0,2" />
+                <TextBlock Text="{Binding StatusMessage}"
+                           Foreground="#444444" />
+
+                <WrapPanel Margin="0,10,0,0">
+                    <StackPanel Width="220" Margin="0,0,10,0">
+                        <TextBlock Text="Warehouse" />
+                        <ComboBox ItemsSource="{Binding WarehouseFilters}"
+                                  SelectedItem="{Binding SelectedWarehouseFilter}"
+                                  Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="220" Margin="0,0,10,0">
+                        <TextBlock Text="Status" />
+                        <ComboBox ItemsSource="{Binding StatusFilters}"
+                                  SelectedItem="{Binding SelectedStatusFilter}"
+                                  Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="260" Margin="0,0,10,0">
+                        <TextBlock Text="Search" />
+                        <TextBox Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                 Height="30" />
+                    </StackPanel>
+                    <StackPanel Width="120">
+                        <TextBlock Text=" " />
+                        <Button Content="Refresh"
+                                Command="{Binding RefreshCommand}"
+                                Height="30" />
+                    </StackPanel>
+                </WrapPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1"
+                BorderBrush="#DDDDDD"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="12">
+            <DataGrid ItemsSource="{Binding FilteredAlerts}"
+                      AutoGenerateColumns="False"
+                      IsReadOnly="True"
+                      CanUserAddRows="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Warehouse"
+                                        Binding="{Binding WarehouseCode}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="SKU"
+                                        Binding="{Binding Sku}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="Product"
+                                        Binding="{Binding ProductName}"
+                                        Width="220" />
+                    <DataGridTextColumn Header="Lot"
+                                        Binding="{Binding LotCode}"
+                                        Width="120" />
+                    <DataGridTextColumn Header="Expiry Date"
+                                        Binding="{Binding ExpiryDateDisplay}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="Days To Expiry"
+                                        Binding="{Binding DaysToExpiryDisplay}"
+                                        Width="110" />
+                    <DataGridTextColumn Header="Remaining Qty"
+                                        Binding="{Binding RemainingQty, StringFormat=N3}"
+                                        Width="120" />
+                    <DataGridTextColumn Header="Status"
+                                        Binding="{Binding ExpiryStatus}"
+                                        Width="140" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+    </Grid>
+</Window>

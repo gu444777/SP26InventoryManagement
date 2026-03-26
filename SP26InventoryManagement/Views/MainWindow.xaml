@@ -123,8 +123,22 @@
                         <Button Content="View Stock Snapshot"
             Width="180"
             Height="38"
+            Margin="0,0,10,0"
             Visibility="{Binding CanViewStockSnapshot, Converter={StaticResource BooleanToVisibilityConverter}}"
             Click="OpenStockSnapshotButton_OnClick" />
+
+                        <Button Content="View Stock Ledger"
+            Width="170"
+            Height="38"
+            Margin="0,0,10,0"
+            Visibility="{Binding CanViewStockLedger, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenStockLedgerButton_OnClick" />
+
+                        <Button Content="View Expiry Alerts"
+            Width="170"
+            Height="38"
+            Visibility="{Binding CanViewExpiryAlerts, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenExpiryAlertsButton_OnClick" />
 
                     </WrapPanel>
                 </StackPanel>

@@ -72,6 +72,10 @@ public class MainWindowViewModel : ObservableObject
 
     public bool CanViewStockSnapshot => _currentUserContext.IsAuthenticated;
 
+    public bool CanViewStockLedger => _currentUserContext.IsAuthenticated;
+
+    public bool CanViewExpiryAlerts => _currentUserContext.IsAuthenticated;
+
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 
     public ICommand LogoutCommand => _logoutCommand;

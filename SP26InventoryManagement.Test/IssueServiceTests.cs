@@ -15,10 +15,10 @@ public class IssueServiceTests
         TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
         SeedProductLots(
             harness.DbContext,
-            (lotId: 1001, lotCode: "LOT-FEFO", onHandQty: 4m, unitCost: 10m, receivedDaysAgo: 10, expiryInDays: 5),
-            (lotId: 1002, lotCode: "LOT-FIFO", onHandQty: 6m, unitCost: 12m, receivedDaysAgo: 8, expiryInDays: null));
+            (lotId: 1001, warehouseId: 1, lotCode: "LOT-FEFO", onHandQty: 4m, unitCost: 10m, receivedDaysAgo: 10, expiryInDays: 5),
+            (lotId: 1002, warehouseId: 1, lotCode: "LOT-FIFO", onHandQty: 6m, unitCost: 12m, receivedDaysAgo: 8, expiryInDays: null));
 
-        IssueRequestDto request = BuildIssueRequest(qty: 5m, unitPrice: 20m);
+        IssueRequestDto request = BuildIssueRequest(warehouseId: 1, qty: 5m, unitPrice: 20m);
 
         PreviewIssueAllocationResult result = await harness.Service.PreviewLotAllocationAsync(
             request,
@@ -42,9 +42,9 @@ public class IssueServiceTests
         TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
         SeedProductLots(
             harness.DbContext,
-            (lotId: 2001, lotCode: "LOT-RESERVE", onHandQty: 10m, unitCost: 9m, receivedDaysAgo: 7, expiryInDays: 15));
+            (lotId: 2001, warehouseId: 1, lotCode: "LOT-RESERVE", onHandQty: 10m, unitCost: 9m, receivedDaysAgo: 7, expiryInDays: 15));
 
-        IssueRequestDto request = BuildIssueRequest(qty: 6m, unitPrice: 15m);
+        IssueRequestDto request = BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 15m);
 
         CreateIssueResult result = await harness.Service.CreateIssueAsync(
             request,
@@ -78,10 +78,10 @@ public class IssueServiceTests
         TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
         SeedProductLots(
             harness.DbContext,
-            (lotId: 3001, lotCode: "LOT-POST", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 12));
+            (lotId: 3001, warehouseId: 1, lotCode: "LOT-POST", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 12));
 
         CreateIssueResult createResult = await harness.Service.CreateIssueAsync(
-            BuildIssueRequest(qty: 6m, unitPrice: 11m),
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -89,14 +89,14 @@ public class IssueServiceTests
         Assert.NotNull(createResult.TransactionId);
 
         harness.CurrentUserContext.SetUser(
-            userId: 2,
+            userId: 3,
             username: "manager01",
             fullName: "Manager User",
             roleCodes: ["MANAGER"]);
 
         PostIssueResult postResult = await harness.Service.PostIssueAsync(
             createResult.TransactionId!.Value,
-            actorUserId: 2,
+            actorUserId: 3,
             CancellationToken.None);
 
         Assert.True(postResult.IsSuccess);
@@ -116,18 +116,302 @@ public class IssueServiceTests
         Assert.Equal(4m, lot.RemainingQty);
         Assert.Equal("ACTIVE", lot.Status);
         Assert.Equal("POSTED", postedTransaction.DocumentStatus);
-        Assert.Equal(2, postedTransaction.PostedByUserId);
+        Assert.Equal(3, postedTransaction.PostedByUserId);
         Assert.Contains("POST_ISSUE", harness.AuditLogService.ActionTypes);
     }
 
-    private static TestHarness CreateHarness(int userId, IReadOnlyCollection<string> roleCodes)
+    [Fact]
+    public async Task GetDraftIssuesAsync_ShouldReturnOnlyOwnDraftsForStaff()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 4001, warehouseId: 1, lotCode: "LOT-S1", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 5, expiryInDays: 20),
+            (lotId: 4002, warehouseId: 2, lotCode: "LOT-S2", onHandQty: 10m, unitCost: 9m, receivedDaysAgo: 5, expiryInDays: 20));
+
+        CreateIssueResult draftByStaff1 = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 4m, unitPrice: 10m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(draftByStaff1.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(2, "staff02", "Staff 02", ["WAREHOUSE_STAFF"]);
+
+        CreateIssueResult draftByStaff2 = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 2, qty: 3m, unitPrice: 10m),
+            actorUserId: 2,
+            CancellationToken.None);
+        Assert.True(draftByStaff2.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(1, "staff01", "Staff 01", ["WAREHOUSE_STAFF"]);
+
+        IReadOnlyList<DraftIssueHeaderDto> drafts = await harness.Service.GetDraftIssuesAsync(
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.Single(drafts);
+        Assert.Equal(draftByStaff1.TransactionId, drafts[0].TransactionId);
+    }
+
+    [Fact]
+    public async Task GetDraftIssuesAsync_ShouldReturnAllDraftsForManager()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 5001, warehouseId: 1, lotCode: "LOT-S1", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 5, expiryInDays: 20),
+            (lotId: 5002, warehouseId: 2, lotCode: "LOT-S2", onHandQty: 10m, unitCost: 9m, receivedDaysAgo: 5, expiryInDays: 20));
+
+        CreateIssueResult draftByStaff1 = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 4m, unitPrice: 10m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(draftByStaff1.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(2, "staff02", "Staff 02", ["WAREHOUSE_STAFF"]);
+        CreateIssueResult draftByStaff2 = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 2, qty: 3m, unitPrice: 10m),
+            actorUserId: 2,
+            CancellationToken.None);
+        Assert.True(draftByStaff2.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(3, "manager01", "Manager 01", ["MANAGER"]);
+
+        IReadOnlyList<DraftIssueHeaderDto> drafts = await harness.Service.GetDraftIssuesAsync(
+            actorUserId: 3,
+            CancellationToken.None);
+
+        Assert.Equal(2, drafts.Count);
+        Assert.Contains(drafts, item => item.TransactionId == draftByStaff1.TransactionId);
+        Assert.Contains(drafts, item => item.TransactionId == draftByStaff2.TransactionId);
+    }
+
+    [Fact]
+    public async Task GetDraftIssueLinesAsync_ShouldThrowForStaffAccessingOthersDraft()
+    {
+        TestHarness harness = CreateHarness(userId: 2, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 6001, warehouseId: 2, lotCode: "LOT-S2", onHandQty: 10m, unitCost: 9m, receivedDaysAgo: 5, expiryInDays: 20));
+
+        CreateIssueResult draftByStaff2 = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 2, qty: 3m, unitPrice: 10m),
+            actorUserId: 2,
+            CancellationToken.None);
+        Assert.True(draftByStaff2.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(1, "staff01", "Staff 01", ["WAREHOUSE_STAFF"]);
+
+        UnauthorizedAccessException exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            harness.Service.GetDraftIssueLinesAsync(
+                draftByStaff2.TransactionId!.Value,
+                actorUserId: 1,
+                CancellationToken.None));
+
+        Assert.Contains("Access denied.", exception.Message);
+    }
+
+    [Fact]
+    public async Task PreviewLotAllocationAsync_ShouldFailWhenStaffWarehouseMismatch()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+
+        PreviewIssueAllocationResult result = await harness.Service.PreviewLotAllocationAsync(
+            BuildIssueRequest(warehouseId: 2, qty: 2m, unitPrice: 10m),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Warehouse must match your assignment", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task CreateIssueAsync_ShouldFailWhenStaffWarehouseMismatch()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+
+        CreateIssueResult result = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 2, qty: 2m, unitPrice: 10m),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Warehouse must match your assignment", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task GetActiveWarehousesAsync_ShouldReturnOnlyAssignedWarehouseForStaff()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+
+        IReadOnlyList<WarehouseLookupDto> warehouses = await harness.Service.GetActiveWarehousesAsync(
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.Single(warehouses);
+        Assert.Equal(1, warehouses[0].WarehouseId);
+    }
+
+    [Fact]
+    public async Task GetAvailableQtyAsync_ShouldThrowWhenStaffQueriesDifferentWarehouse()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+
+        UnauthorizedAccessException exception = await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            harness.Service.GetAvailableQtyAsync(
+                warehouseId: 2,
+                productId: 1,
+                transactionDate: DateTime.UtcNow.Date,
+                actorUserId: 1,
+                CancellationToken.None));
+
+        Assert.Contains("Warehouse must match your assignment", exception.Message);
+    }
+
+    [Fact]
+    public async Task PostIssueAsync_ShouldFailWhenReservationInsufficient()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 7001, warehouseId: 1, lotCode: "LOT-RSV", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 20));
+
+        CreateIssueResult createResult = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        StockBalance stockBalance = await harness.DbContext.StockBalances.SingleAsync(balance =>
+            balance.WarehouseId == 1 && balance.ProductId == 1 && balance.ProductLotId == 7001);
+        stockBalance.AllocatedQty = 5m;
+        await harness.DbContext.SaveChangesAsync();
+
+        harness.CurrentUserContext.SetUser(3, "manager01", "Manager User", ["MANAGER"]);
+
+        PostIssueResult postResult = await harness.Service.PostIssueAsync(
+            createResult.TransactionId!.Value,
+            actorUserId: 3,
+            CancellationToken.None);
+
+        Assert.False(postResult.IsSuccess);
+        Assert.Contains("Reservation", postResult.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task PostIssueAsync_ShouldFailWhenLotExpiredAtTransactionDate()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 8001, warehouseId: 1, lotCode: "LOT-EXP", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 20));
+
+        DateTime transactionDate = DateTime.UtcNow.Date;
+        CreateIssueResult createResult = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m, transactionDate: transactionDate),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        ProductLot lot = await harness.DbContext.ProductLots.SingleAsync(productLot => productLot.ProductLotId == 8001);
+        lot.ExpiryDate = DateOnly.FromDateTime(transactionDate.AddDays(-1));
+        await harness.DbContext.SaveChangesAsync();
+
+        harness.CurrentUserContext.SetUser(3, "manager01", "Manager User", ["MANAGER"]);
+
+        PostIssueResult postResult = await harness.Service.PostIssueAsync(
+            createResult.TransactionId!.Value,
+            actorUserId: 3,
+            CancellationToken.None);
+
+        Assert.False(postResult.IsSuccess);
+        Assert.Contains("expired lot", postResult.ErrorMessage ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateIssueAsync_ShouldReturnConcurrencyMessageWhenConflict()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"], useConcurrencyDbContext: true);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 9001, warehouseId: 1, lotCode: "LOT-CONC", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 20));
+
+        harness.RequireConcurrencyDbContext().ThrowConcurrencyOnNextSave = true;
+
+        CreateIssueResult result = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Stock changed while reserving lots for this draft", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task PostIssueAsync_ShouldReturnConcurrencyMessageWhenConflict()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"], useConcurrencyDbContext: true);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 9101, warehouseId: 1, lotCode: "LOT-CONC", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 20));
+
+        CreateIssueResult createResult = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(3, "manager01", "Manager User", ["MANAGER"]);
+        harness.RequireConcurrencyDbContext().ThrowConcurrencyOnNextSave = true;
+
+        PostIssueResult result = await harness.Service.PostIssueAsync(
+            createResult.TransactionId!.Value,
+            actorUserId: 3,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Posting failed because data was modified by another user", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task CancelDraftIssueAsync_ShouldReturnConcurrencyMessageWhenConflict()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"], useConcurrencyDbContext: true);
+        SeedProductLots(
+            harness.DbContext,
+            (lotId: 9201, warehouseId: 1, lotCode: "LOT-CONC", onHandQty: 10m, unitCost: 8m, receivedDaysAgo: 6, expiryInDays: 20));
+
+        CreateIssueResult createResult = await harness.Service.CreateIssueAsync(
+            BuildIssueRequest(warehouseId: 1, qty: 6m, unitPrice: 11m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(3, "manager01", "Manager User", ["MANAGER"]);
+        harness.RequireConcurrencyDbContext().ThrowConcurrencyOnNextSave = true;
+
+        CancelIssueResult result = await harness.Service.CancelDraftIssueAsync(
+            createResult.TransactionId!.Value,
+            actorUserId: 3,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Cancellation failed because data was modified by another user", result.ErrorMessage ?? string.Empty);
+    }
+
+    private static TestHarness CreateHarness(
+        int userId,
+        IReadOnlyCollection<string> roleCodes,
+        bool useConcurrencyDbContext = false)
     {
         DbContextOptions<Sp26inventoryManagementDbContext> options = new DbContextOptionsBuilder<Sp26inventoryManagementDbContext>()
             .UseInMemoryDatabase($"IssueServiceTests-{Guid.NewGuid():N}")
             .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
-        var dbContext = new Sp26inventoryManagementDbContext(options);
+        Sp26inventoryManagementDbContext dbContext = useConcurrencyDbContext
+            ? new ThrowConcurrencyOnceDbContext(options)
+            : new Sp26inventoryManagementDbContext(options);
         SeedReferenceData(dbContext);
 
         var currentUserContext = new CurrentUserContext();
@@ -167,15 +451,25 @@ public class IssueServiceTests
             RowVersion = [1]
         });
 
-        dbContext.Warehouses.Add(new Warehouse
-        {
-            WarehouseId = 1,
-            WarehouseCode = "WH01",
-            WarehouseName = "Main Warehouse",
-            IsActive = true,
-            CreatedAt = now,
-            RowVersion = [1]
-        });
+        dbContext.Warehouses.AddRange(
+            new Warehouse
+            {
+                WarehouseId = 1,
+                WarehouseCode = "WH01",
+                WarehouseName = "Main Warehouse",
+                IsActive = true,
+                CreatedAt = now,
+                RowVersion = [1]
+            },
+            new Warehouse
+            {
+                WarehouseId = 2,
+                WarehouseCode = "WH02",
+                WarehouseName = "Secondary Warehouse",
+                IsActive = true,
+                CreatedAt = now,
+                RowVersion = [1]
+            });
 
         dbContext.Users.AddRange(
             new User
@@ -183,7 +477,7 @@ public class IssueServiceTests
                 UserId = 1,
                 Username = "staff01",
                 PasswordHash = "x",
-                FullName = "Staff User",
+                FullName = "Staff User 01",
                 IsActive = true,
                 CreatedAt = now,
                 RowVersion = [1]
@@ -191,11 +485,49 @@ public class IssueServiceTests
             new User
             {
                 UserId = 2,
+                Username = "staff02",
+                PasswordHash = "x",
+                FullName = "Staff User 02",
+                IsActive = true,
+                CreatedAt = now,
+                RowVersion = [1]
+            },
+            new User
+            {
+                UserId = 3,
                 Username = "manager01",
                 PasswordHash = "x",
                 FullName = "Manager User",
                 IsActive = true,
                 CreatedAt = now,
+                RowVersion = [1]
+            },
+            new User
+            {
+                UserId = 4,
+                Username = "admin01",
+                PasswordHash = "x",
+                FullName = "Admin User",
+                IsActive = true,
+                CreatedAt = now,
+                RowVersion = [1]
+            });
+
+        dbContext.UserWarehouseAssignments.AddRange(
+            new UserWarehouseAssignment
+            {
+                UserId = 1,
+                WarehouseId = 1,
+                AssignedAt = now,
+                AssignedByUserId = null,
+                RowVersion = [1]
+            },
+            new UserWarehouseAssignment
+            {
+                UserId = 2,
+                WarehouseId = 2,
+                AssignedAt = now,
+                AssignedByUserId = null,
                 RowVersion = [1]
             });
 
@@ -204,7 +536,7 @@ public class IssueServiceTests
 
     private static void SeedProductLots(
         Sp26inventoryManagementDbContext dbContext,
-        params (long lotId, string lotCode, decimal onHandQty, decimal unitCost, int receivedDaysAgo, int? expiryInDays)[] lots)
+        params (long lotId, int warehouseId, string lotCode, decimal onHandQty, decimal unitCost, int receivedDaysAgo, int? expiryInDays)[] lots)
     {
         DateTime now = DateTime.UtcNow;
         foreach (var lotSeed in lots)
@@ -217,7 +549,7 @@ public class IssueServiceTests
             dbContext.ProductLots.Add(new ProductLot
             {
                 ProductLotId = lotSeed.lotId,
-                WarehouseId = 1,
+                WarehouseId = lotSeed.warehouseId,
                 ProductId = 1,
                 LotCode = lotSeed.lotCode,
                 ReceivedDate = receivedDate,
@@ -232,7 +564,7 @@ public class IssueServiceTests
 
             dbContext.StockBalances.Add(new StockBalance
             {
-                WarehouseId = 1,
+                WarehouseId = lotSeed.warehouseId,
                 ProductId = 1,
                 ProductLotId = lotSeed.lotId,
                 OnHandQty = lotSeed.onHandQty,
@@ -245,12 +577,16 @@ public class IssueServiceTests
         dbContext.SaveChanges();
     }
 
-    private static IssueRequestDto BuildIssueRequest(decimal qty, decimal? unitPrice)
+    private static IssueRequestDto BuildIssueRequest(
+        int warehouseId,
+        decimal qty,
+        decimal? unitPrice,
+        DateTime? transactionDate = null)
     {
         return new IssueRequestDto
         {
-            WarehouseId = 1,
-            TransactionDate = DateTime.UtcNow.Date,
+            WarehouseId = warehouseId,
+            TransactionDate = (transactionDate ?? DateTime.UtcNow.Date).Date,
             ReferenceNo = "REF-UNIT",
             Remarks = "Unit Test",
             Lines =
@@ -278,6 +614,11 @@ public class IssueServiceTests
         public CurrentUserContext CurrentUserContext { get; } = currentUserContext;
 
         public RecordingAuditLogService AuditLogService { get; } = auditLogService;
+
+        public ThrowConcurrencyOnceDbContext RequireConcurrencyDbContext()
+        {
+            return Assert.IsType<ThrowConcurrencyOnceDbContext>(DbContext);
+        }
     }
 
     private sealed class AlwaysValidSessionValidationService : ISessionValidationService
@@ -315,6 +656,23 @@ public class IssueServiceTests
         {
             ActionTypes.Add(actionType);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowConcurrencyOnceDbContext(DbContextOptions<Sp26inventoryManagementDbContext> options)
+        : Sp26inventoryManagementDbContext(options)
+    {
+        public bool ThrowConcurrencyOnNextSave { get; set; }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            if (ThrowConcurrencyOnNextSave)
+            {
+                ThrowConcurrencyOnNextSave = false;
+                throw new DbUpdateConcurrencyException("Simulated concurrency conflict.");
+            }
+
+            return base.SaveChangesAsync(cancellationToken);
         }
     }
 }

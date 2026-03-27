@@ -6,6 +6,8 @@ namespace SP26InventoryManagement.Services;
 
 public class SessionValidationService : ISessionValidationService
 {
+    private const string SessionInvalidatedMessage = "Session invalidated because your permissions changed. Please log in again.";
+
     private readonly CurrentUserContext _currentUserContext;
     private readonly IUserRepository _userRepository;
 
@@ -47,14 +49,21 @@ public class SessionValidationService : ISessionValidationService
             return OperationResult.Failure("Session expired. Please log in again.");
         }
 
+        var fingerprintUser = await _userRepository.GetByIdAsync(expectedUserId, ct);
+        if (fingerprintUser is null || !fingerprintUser.IsActive || fingerprintUser.AuthVersion != _currentUserContext.AuthVersion)
+        {
+            _currentUserContext.Clear();
+            return OperationResult.Failure(SessionInvalidatedMessage);
+        }
+
         bool needRevalidation = forceRevalidation || _currentUserContext.NeedsRevalidation(requiredRoleCode);
         if (needRevalidation)
         {
             var user = await _userRepository.GetByIdWithRolesAsync(expectedUserId, ct);
-            if (user is null || !user.IsActive)
+            if (user is null || !user.IsActive || user.AuthVersion != fingerprintUser.AuthVersion)
             {
                 _currentUserContext.Clear();
-                return OperationResult.Failure("Your account is inactive or unavailable. Please contact administrator.");
+                return OperationResult.Failure(SessionInvalidatedMessage);
             }
 
             IReadOnlyCollection<string> roleCodes = user.UserRoleUsers
@@ -63,7 +72,7 @@ public class SessionValidationService : ISessionValidationService
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            _currentUserContext.SetUser(user.UserId, user.Username, user.FullName, roleCodes);
+            _currentUserContext.SetUser(user.UserId, user.Username, user.FullName, roleCodes, user.AuthVersion);
         }
 
         if (!string.IsNullOrWhiteSpace(requiredRoleCode) && !_currentUserContext.IsInRole(requiredRoleCode))

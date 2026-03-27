@@ -23,6 +23,7 @@ public class AdminUserManagementViewModel : ObservableObject
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly AsyncRelayCommand _openCreateUserCommand;
+    private readonly AsyncRelayCommand _openStaffWarehouseAssignmentCommand;
     private readonly AsyncRelayCommand _saveRolesCommand;
     private readonly AsyncRelayCommand _resetPasswordCommand;
     private readonly AsyncRelayCommand _deactivateUserCommand;
@@ -70,6 +71,7 @@ public class AdminUserManagementViewModel : ObservableObject
         _nextPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage + 1), CanMoveToNextPage);
         _previousPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage - 1), CanMoveToPreviousPage);
         _openCreateUserCommand = new AsyncRelayCommand(OpenCreateUserAsync, () => !IsBusy && HasAdminSession());
+        _openStaffWarehouseAssignmentCommand = new AsyncRelayCommand(OpenStaffWarehouseAssignmentAsync, () => !IsBusy && HasAdminSession());
         _saveRolesCommand = new AsyncRelayCommand(SaveRolesAsync, CanSaveRoles);
         _resetPasswordCommand = new AsyncRelayCommand(ResetPasswordAsync, CanOperateOnSelectedUser);
         _deactivateUserCommand = new AsyncRelayCommand(DeactivateUserAsync, CanDeactivateSelectedUser);
@@ -177,6 +179,8 @@ public class AdminUserManagementViewModel : ObservableObject
     public ICommand PreviousPageCommand => _previousPageCommand;
 
     public ICommand OpenCreateUserCommand => _openCreateUserCommand;
+
+    public ICommand OpenStaffWarehouseAssignmentCommand => _openStaffWarehouseAssignmentCommand;
 
     public ICommand SaveRolesCommand => _saveRolesCommand;
 
@@ -300,6 +304,16 @@ public class AdminUserManagementViewModel : ObservableObject
         {
             await LoadUsersAsync(CurrentPage);
         }
+    }
+
+    private async Task OpenStaffWarehouseAssignmentAsync()
+    {
+        if (!EnsureAdminSessionForAction())
+        {
+            return;
+        }
+
+        await _userDialogService.ShowStaffWarehouseAssignmentDialogAsync(CancellationToken.None);
     }
 
     private async Task SaveRolesAsync()
@@ -571,6 +585,7 @@ public class AdminUserManagementViewModel : ObservableObject
         _nextPageCommand.RaiseCanExecuteChanged();
         _previousPageCommand.RaiseCanExecuteChanged();
         _openCreateUserCommand.RaiseCanExecuteChanged();
+        _openStaffWarehouseAssignmentCommand.RaiseCanExecuteChanged();
         _saveRolesCommand.RaiseCanExecuteChanged();
         _resetPasswordCommand.RaiseCanExecuteChanged();
         _deactivateUserCommand.RaiseCanExecuteChanged();

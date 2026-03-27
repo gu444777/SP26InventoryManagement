@@ -8,7 +8,14 @@ public interface IUserManagementService
 
     Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, int actorUserId, CancellationToken ct);
 
+    Task<PagedResult<StaffWarehouseAssignmentItemDto>> GetStaffWarehouseAssignmentsAsync(
+        StaffWarehouseAssignmentSearchCriteria criteria,
+        int actorUserId,
+        CancellationToken ct);
+
     Task<CreateUserResult> CreateUserAsync(CreateUserRequest request, int actorUserId, CancellationToken ct);
+
+    Task<OperationResult> AssignOrChangeStaffWarehouseAsync(int staffUserId, int warehouseId, int actorUserId, CancellationToken ct);
 
     Task<OperationResult> SetUserRolesAsync(int targetUserId, IReadOnlyCollection<int> roleIds, int actorUserId, CancellationToken ct);
 

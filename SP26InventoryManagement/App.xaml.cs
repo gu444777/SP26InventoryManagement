@@ -103,6 +103,7 @@ namespace SP26InventoryManagement
             services.AddTransient<TransferManagementViewModel>();
             services.AddTransient<MainWindowViewModel>();
             services.AddTransient<AdminUserManagementViewModel>();
+            services.AddTransient<StaffWarehouseAssignmentViewModel>();
             services.AddTransient<CreateUserViewModel>();
             services.AddTransient<ChangePasswordViewModel>();
 
@@ -112,6 +113,7 @@ namespace SP26InventoryManagement
             services.AddTransient<IssueManagerWindow>();
             services.AddTransient<TransferWindow>();
             services.AddTransient<AdminUserManagementWindow>();
+            services.AddTransient<StaffWarehouseAssignmentWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
             services.AddTransient<ISupplierService, SupplierService>();

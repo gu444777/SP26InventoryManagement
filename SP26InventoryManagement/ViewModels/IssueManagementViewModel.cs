@@ -273,7 +273,7 @@ public class IssueManagementViewModel : ObservableObject
         try
         {
             IReadOnlyList<WarehouseLookupDto> warehouses = await ExecuteIssueServiceCallAsync(
-                () => _issueService.GetActiveWarehousesAsync(ct));
+                () => _issueService.GetActiveWarehousesAsync(_currentUserContext.UserId!.Value, ct));
             IReadOnlyList<CustomerLookupDto> customers = await ExecuteIssueServiceCallAsync(
                 () => _issueService.GetActiveCustomersAsync(ct));
             IReadOnlyList<ProductLookupDto> products = await ExecuteIssueServiceCallAsync(
@@ -545,7 +545,7 @@ public class IssueManagementViewModel : ObservableObject
         {
             long? selectedId = SelectedDraftIssue?.TransactionId;
             IReadOnlyList<DraftIssueHeaderDto> drafts = await ExecuteIssueServiceCallAsync(
-                () => _issueService.GetDraftIssuesAsync(CancellationToken.None));
+                () => _issueService.GetDraftIssuesAsync(_currentUserContext.UserId!.Value, CancellationToken.None));
             ReplaceCollection(DraftIssues, drafts);
 
             if (selectedId.HasValue)
@@ -718,6 +718,7 @@ public class IssueManagementViewModel : ObservableObject
             IReadOnlyList<DraftIssueLineDto> lines = await ExecuteIssueServiceCallAsync(
                 () => _issueService.GetDraftIssueLinesAsync(
                     transactionId,
+                    _currentUserContext.UserId!.Value,
                     CancellationToken.None));
 
             if (requestVersion != _draftIssueLineRequestVersion)
@@ -974,6 +975,7 @@ public class IssueManagementViewModel : ObservableObject
                     selectedWarehouse.WarehouseId,
                     selectedProduct.ProductId,
                     TransactionDate,
+                    _currentUserContext.UserId!.Value,
                     CancellationToken.None));
 
             if (requestVersion != _availableQtyRequestVersion)

@@ -504,6 +504,7 @@ public partial class Sp26inventoryManagementDbContext : DbContext
                 .HasDefaultValueSql("(sysutcdatetime())");
             entity.Property(e => e.Email).HasMaxLength(150);
             entity.Property(e => e.FullName).HasMaxLength(150);
+            entity.Property(e => e.AuthVersion).HasDefaultValue(1);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.LastLoginAt).HasPrecision(0);
             entity.Property(e => e.PasswordHash).HasMaxLength(255);

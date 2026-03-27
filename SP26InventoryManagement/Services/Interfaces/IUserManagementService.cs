@@ -4,6 +4,8 @@ namespace SP26InventoryManagement.Services;
 
 public interface IUserManagementService
 {
+    Task<IReadOnlyList<WarehouseLookupDto>> GetActiveWarehousesAsync(int actorUserId, CancellationToken ct);
+
     Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, int actorUserId, CancellationToken ct);
 
     Task<CreateUserResult> CreateUserAsync(CreateUserRequest request, int actorUserId, CancellationToken ct);

@@ -48,6 +48,9 @@ public class MainWindowViewModel : ObservableObject
 
     public bool CanOpenIssueManager => _currentUserContext.IsInRole(ManagerRoleCode);
 
+    public bool CanOpenTransfer =>
+        _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
 
     public ICommand LogoutCommand => _logoutCommand;

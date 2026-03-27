@@ -130,6 +130,38 @@ namespace SP26InventoryManagement
             window.Activate();
         }
 
+        private void OpenTransferButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenTransferWindow =
+                _currentUserContext.IsInRole(StaffRoleCode) ||
+                _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenTransferWindow)
+            {
+                MessageBox.Show(
+                    "Only WAREHOUSE_STAFF or ADMIN can open Transfer screen.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<TransferWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
         private void OnClosed(object? sender, EventArgs e)
         {
             _sessionMonitorTimer.Stop();

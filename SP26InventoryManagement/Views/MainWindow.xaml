@@ -84,8 +84,14 @@
                         <Button Content="Open Issue (Manager)"
                                 Width="190"
                                 Height="38"
+                                Margin="0,0,10,0"
                                 Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenIssueManagerButton_OnClick" />
+                        <Button Content="Open Transfer"
+                                Width="150"
+                                Height="38"
+                                Visibility="{Binding CanOpenTransfer, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Click="OpenTransferButton_OnClick" />
                     </WrapPanel>
                 </StackPanel>
             </Border>

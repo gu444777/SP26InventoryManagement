@@ -2,12 +2,18 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Create User"
-        Height="520"
+        Height="610"
         Width="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
+    </Window.Resources>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -52,11 +58,24 @@
         </Grid>
 
         <TextBlock Grid.Row="6"
+                   Text="Warehouse (Required for Warehouse Staff)"
+                   FontWeight="SemiBold"
+                   Margin="0,14,0,6"
+                   Visibility="{Binding IsStaffRoleSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+        <ComboBox Grid.Row="7"
+                  Height="32"
+                  ItemsSource="{Binding Warehouses}"
+                  SelectedItem="{Binding SelectedWarehouse}"
+                  DisplayMemberPath="Display"
+                  Visibility="{Binding IsStaffRoleSelected, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+        <TextBlock Grid.Row="8"
                    Text="Roles"
                    FontWeight="SemiBold"
                    Margin="0,14,0,6" />
 
-        <Border Grid.Row="7"
+        <Border Grid.Row="9"
                 BorderBrush="#DDDDDD"
                 BorderThickness="1"
                 CornerRadius="6"
@@ -74,7 +93,7 @@
             </ScrollViewer>
         </Border>
 
-        <StackPanel Grid.Row="8" Margin="0,12,0,0">
+        <StackPanel Grid.Row="10" Margin="0,12,0,0">
             <TextBlock Text="{Binding ErrorMessage}"
                        Foreground="Crimson"
                        TextWrapping="Wrap"

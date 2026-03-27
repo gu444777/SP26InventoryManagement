@@ -8,6 +8,7 @@ namespace SP26InventoryManagement.Services;
 public class UserManagementService : IUserManagementService
 {
     private const string AdminRoleCode = "ADMIN";
+    private const string StaffRoleCode = "WAREHOUSE_STAFF";
 
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
@@ -15,8 +16,10 @@ public class UserManagementService : IUserManagementService
     private readonly IPasswordHasher _passwordHasher;
     private readonly IAuditLogService _auditLogService;
     private readonly ISessionValidationService _sessionValidationService;
+    private readonly Sp26inventoryManagementDbContext _dbContext;
 
     public UserManagementService(
+        Sp26inventoryManagementDbContext dbContext,
         IUserRepository userRepository,
         IRoleRepository roleRepository,
         IUserRoleRepository userRoleRepository,
@@ -24,12 +27,34 @@ public class UserManagementService : IUserManagementService
         IAuditLogService auditLogService,
         ISessionValidationService sessionValidationService)
     {
+        _dbContext = dbContext;
         _userRepository = userRepository;
         _roleRepository = roleRepository;
         _userRoleRepository = userRoleRepository;
         _passwordHasher = passwordHasher;
         _auditLogService = auditLogService;
         _sessionValidationService = sessionValidationService;
+    }
+
+    public async Task<IReadOnlyList<WarehouseLookupDto>> GetActiveWarehousesAsync(int actorUserId, CancellationToken ct)
+    {
+        OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        return await _dbContext.Warehouses
+            .AsNoTracking()
+            .Where(warehouse => warehouse.IsActive)
+            .OrderBy(warehouse => warehouse.WarehouseCode)
+            .Select(warehouse => new WarehouseLookupDto
+            {
+                WarehouseId = warehouse.WarehouseId,
+                WarehouseCode = warehouse.WarehouseCode,
+                WarehouseName = warehouse.WarehouseName
+            })
+            .ToListAsync(ct);
     }
 
     public async Task<PagedResult<UserListItemDto>> SearchUsersAsync(UserSearchCriteria criteria, int actorUserId, CancellationToken ct)
@@ -56,6 +81,7 @@ public class UserManagementService : IUserManagementService
         string? email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim();
         string? phoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
         IReadOnlyCollection<int> roleIds = request.RoleIds.Distinct().ToArray();
+        int? warehouseId = request.WarehouseId;
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(fullName))
         {
@@ -83,6 +109,23 @@ public class UserManagementService : IUserManagementService
             return CreateUserResult.Failure("One or more selected roles are invalid or inactive.");
         }
 
+        bool isStaffUser = roles.Any(role => string.Equals(role.RoleCode, StaffRoleCode, StringComparison.OrdinalIgnoreCase));
+        if (isStaffUser && (!warehouseId.HasValue || warehouseId.Value <= 0))
+        {
+            return CreateUserResult.Failure("Warehouse is required for WAREHOUSE_STAFF.");
+        }
+
+        if (warehouseId.HasValue)
+        {
+            bool warehouseExists = await _dbContext.Warehouses
+                .AsNoTracking()
+                .AnyAsync(warehouse => warehouse.WarehouseId == warehouseId.Value && warehouse.IsActive, ct);
+            if (!warehouseExists)
+            {
+                return CreateUserResult.Failure("Selected warehouse is invalid or inactive.");
+            }
+        }
+
         string generatedPassword = _passwordHasher.GenerateRandomPassword();
 
         var user = new User
@@ -94,13 +137,28 @@ public class UserManagementService : IUserManagementService
             PasswordHash = _passwordHasher.Hash(generatedPassword),
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
-            CreatedByUserId = actorUserId
+            CreatedByUserId = actorUserId,
+            RowVersion = Array.Empty<byte>()
         };
 
         try
         {
             await _userRepository.AddAsync(user, ct);
             await _userRoleRepository.SyncRolesAsync(user.UserId, roleIds, actorUserId, ct);
+
+            if (isStaffUser)
+            {
+                _dbContext.UserWarehouseAssignments.Add(new UserWarehouseAssignment
+                {
+                    UserId = user.UserId,
+                    WarehouseId = warehouseId!.Value,
+                    AssignedAt = DateTime.UtcNow,
+                    AssignedByUserId = actorUserId,
+                    RowVersion = Array.Empty<byte>()
+                });
+
+                await _dbContext.SaveChangesAsync(ct);
+            }
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -118,7 +176,7 @@ public class UserManagementService : IUserManagementService
             userId: actorUserId,
             isSuccess: true,
             severity: "INFO",
-            details: new { user.Username, RoleIds = roleIds },
+            details: new { user.Username, RoleIds = roleIds, WarehouseId = warehouseId },
             clientIp: null,
             clientApp: "WPF-Client",
             ct: ct);

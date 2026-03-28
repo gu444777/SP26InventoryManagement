@@ -11,4 +11,6 @@ public class CreateUserRequest
     public string? PhoneNumber { get; init; }
 
     public IReadOnlyCollection<int> RoleIds { get; init; } = Array.Empty<int>();
+
+    public int? WarehouseId { get; init; }
 }

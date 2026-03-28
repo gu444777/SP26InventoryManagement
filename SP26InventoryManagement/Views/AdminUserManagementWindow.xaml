@@ -85,6 +85,10 @@
                                 Command="{Binding OpenCreateUserCommand}"
                                 Height="32"
                                 Margin="0,0,0,6" />
+                        <Button Content="Manage Staff Warehouses"
+                                Command="{Binding OpenStaffWarehouseAssignmentCommand}"
+                                Height="32"
+                                Margin="0,0,0,6" />
                         <Button Content="Reset Password"
                                 Command="{Binding ResetPasswordCommand}"
                                 Height="32"

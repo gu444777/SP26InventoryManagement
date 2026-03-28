@@ -94,7 +94,7 @@ public class AuthService : IAuthService
             return LoginResult.Failure("Login failed due to a database update issue.");
         }
 
-        _currentUserContext.SetUser(user.UserId, user.Username, user.FullName, roleCodes);
+        _currentUserContext.SetUser(user.UserId, user.Username, user.FullName, roleCodes, user.AuthVersion);
 
         await _auditLogService.LogAsync(
             actionType: "LOGIN_SUCCESS",

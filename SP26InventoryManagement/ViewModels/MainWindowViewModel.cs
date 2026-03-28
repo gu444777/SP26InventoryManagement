@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Services;
@@ -30,17 +31,26 @@ public class MainWindowViewModel : ObservableObject
     private readonly AsyncRelayCommand _openManageProductsCommand;
     private readonly AsyncRelayCommand _openManageCategoriesCommand;
     private readonly AsyncRelayCommand _openAdjustmentCommand; // 1. KHAI BÁO BIẾN CHO ADJUSTMENT
+    private readonly IServiceProvider _serviceProvider;
+    private readonly AsyncRelayCommand _openChangePasswordCommand;
+    private readonly AsyncRelayCommand _logoutCommand;
+    private readonly RelayCommand _openManageCustomersCommand;
+    private readonly RelayCommand _openManageSuppliersCommand;
 
     public MainWindowViewModel(
         IAuthService authService,
         CurrentUserContext currentUserContext,
         IUserDialogService userDialogService,
-        IMessageService messageService)
+        IMessageService messageService,
+        IServiceProvider serviceProvider)
     {
         _authService = authService;
         _currentUserContext = currentUserContext;
         _userDialogService = userDialogService;
         _messageService = messageService;
+        _serviceProvider = serviceProvider;
+
+
 
         // Khởi tạo các Commands
         _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, CanOpenChangePassword);
@@ -51,6 +61,9 @@ public class MainWindowViewModel : ObservableObject
 
         // 2. KHỞI TẠO LỆNH MỞ ADJUSTMENT
         _openAdjustmentCommand = new AsyncRelayCommand(OpenAdjustmentAsync);
+        _openManageCustomersCommand = new RelayCommand(OpenManageCustomers, CanOpenManageCustomers);
+        _openManageSuppliersCommand = new RelayCommand(OpenManageSuppliers, CanOpenManageSuppliers);
+
     }
 
     public event Action? LogoutRequested;
@@ -63,6 +76,10 @@ public class MainWindowViewModel : ObservableObject
         : string.Join(", ", _currentUserContext.RoleCodes.OrderBy(r => r, StringComparer.OrdinalIgnoreCase));
 
     public bool CanManageUsers => _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanManageMasterData =>
+        _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
     public bool CanOpenIssueStaff => _currentUserContext.IsInRole(StaffRoleCode);
     public bool CanOpenIssueManager => _currentUserContext.IsInRole(ManagerRoleCode);
     public bool CanManageProducts => _currentUserContext.IsInRole(AdminRoleCode) || _currentUserContext.IsInRole(ManagerRoleCode);
@@ -72,6 +89,21 @@ public class MainWindowViewModel : ObservableObject
     public bool CanManageAdjustments => _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(ManagerRoleCode);
 
     // Thuộc tính để Binding ra XAML
+    public bool CanOpenTransfer =>
+        _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanOpenReceiptStaff =>
+        _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanOpenReceiptManager =>
+        _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+
+    public bool CanViewStockSnapshot => _currentUserContext.IsAuthenticated;
+
+    public bool CanViewStockLedger => _currentUserContext.IsAuthenticated;
+
+    public bool CanViewExpiryAlerts => _currentUserContext.IsAuthenticated;
+
     public ICommand OpenChangePasswordCommand => _openChangePasswordCommand;
     public ICommand LogoutCommand => _logoutCommand;
     public ICommand OpenWarehouseCommand => _openWarehouseCommand;
@@ -81,6 +113,29 @@ public class MainWindowViewModel : ObservableObject
 
     private bool CanOpenChangePassword() => _currentUserContext.IsAuthenticated && _currentUserContext.UserId.HasValue;
     private bool CanLogout() => true;
+    public ICommand OpenManageCustomersCommand => _openManageCustomersCommand;
+
+    public ICommand OpenManageSuppliersCommand => _openManageSuppliersCommand;
+
+    private bool CanOpenChangePassword()
+    {
+        return _currentUserContext.IsAuthenticated && _currentUserContext.UserId.HasValue;
+    }
+
+    private bool CanLogout()
+    {
+        return true;
+    }
+
+    private bool CanOpenManageCustomers()
+    {
+        return _currentUserContext.IsAuthenticated && CanManageMasterData;
+    }
+
+    private bool CanOpenManageSuppliers()
+    {
+        return _currentUserContext.IsAuthenticated && CanManageMasterData;
+    }
 
     private Task OpenChangePasswordAsync()
     {
@@ -163,5 +218,39 @@ public class MainWindowViewModel : ObservableObject
             }
         }
         return Task.CompletedTask;
+    }
+}
+    private void OpenManageCustomers()
+    {
+        CustomerView window = _serviceProvider.GetRequiredService<CustomerView>();
+        Window? owner = GetActiveOwner();
+
+        if (owner != null && owner != window)
+        {
+            window.Owner = owner;
+        }
+
+        window.ShowDialog();
+    }
+
+    private void OpenManageSuppliers()
+    {
+        SupplierView window = _serviceProvider.GetRequiredService<SupplierView>();
+        Window? owner = GetActiveOwner();
+
+        if (owner != null && owner != window)
+        {
+            window.Owner = owner;
+        }
+
+        window.ShowDialog();
+    }
+
+    private static Window? GetActiveOwner()
+    {
+        Window? owner = Application.Current.Windows
+            .OfType<Window>()
+            .FirstOrDefault(currentWindow => currentWindow.IsActive);
+        return owner;
     }
 }

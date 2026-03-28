@@ -13,19 +13,22 @@ public class CurrentUserContext
 
     public IReadOnlyCollection<string> RoleCodes { get; private set; } = Array.Empty<string>();
 
+    public int AuthVersion { get; private set; }
+
     public DateTime? SessionExpiresAtUtc { get; private set; }
 
     public DateTime? LastRevalidatedAtUtc { get; private set; }
 
     public bool IsAuthenticated => UserId.HasValue && SessionExpiresAtUtc.HasValue && SessionExpiresAtUtc.Value > DateTime.UtcNow;
 
-    public void SetUser(int userId, string username, string fullName, IReadOnlyCollection<string> roleCodes)
+    public void SetUser(int userId, string username, string fullName, IReadOnlyCollection<string> roleCodes, int authVersion = 1)
     {
         DateTime now = DateTime.UtcNow;
         UserId = userId;
         Username = username;
         FullName = fullName;
         RoleCodes = roleCodes;
+        AuthVersion = authVersion;
         LastRevalidatedAtUtc = now;
         SessionExpiresAtUtc = now.Add(SessionTimeout);
     }
@@ -36,6 +39,7 @@ public class CurrentUserContext
         Username = string.Empty;
         FullName = string.Empty;
         RoleCodes = Array.Empty<string>();
+        AuthVersion = 0;
         SessionExpiresAtUtc = null;
         LastRevalidatedAtUtc = null;
     }

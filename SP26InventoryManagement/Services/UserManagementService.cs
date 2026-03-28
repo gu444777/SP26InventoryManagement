@@ -510,7 +510,7 @@ public class UserManagementService : IUserManagementService
                 }
             }
 
-            roleSyncResult = await _userRoleRepository.SyncRolesAsync(targetUserId, normalizedRoleIds, actorUserId, ct);
+            roleSyncResult = await SyncUserRolesInCurrentContextAsync(targetUserId, normalizedRoleIds, actorUserId, ct);
 
             if (hasStaffBefore && !hasStaffAfter)
             {
@@ -547,9 +547,9 @@ public class UserManagementService : IUserManagementService
         {
             return OperationResult.Failure(BuildConcurrencyConflictMessage("Role update was modified by another action. Please refresh and retry."));
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
-            return OperationResult.Failure("Failed to update user roles due to a database update conflict.");
+            return OperationResult.Failure($"Failed to update user roles due to a database update conflict. {GetMostSpecificErrorMessage(ex)}");
         }
 
         Dictionary<int, string> addedRoleCodeMap = await _roleRepository.GetRoleCodeMapAsync(roleSyncResult.AddedRoleIds, ct);
@@ -858,6 +858,97 @@ public class UserManagementService : IUserManagementService
         }
 
         return roleId.Value;
+    }
+
+    private async Task<RoleSyncResult> SyncUserRolesInCurrentContextAsync(
+        int userId,
+        IReadOnlyCollection<int> targetRoleIds,
+        int actorUserId,
+        CancellationToken ct)
+    {
+        HashSet<int> normalizedRoleIds = targetRoleIds.Distinct().ToHashSet();
+
+        List<UserRole> existingRoles = await _dbContext.UserRoles
+            .Where(userRole => userRole.UserId == userId)
+            .ToListAsync(ct);
+
+        HashSet<int> existingRoleIdsInDb = existingRoles
+            .Select(userRole => userRole.RoleId)
+            .ToHashSet();
+
+        var localEntries = _dbContext.ChangeTracker
+            .Entries<UserRole>()
+            .Where(entry => entry.Entity.UserId == userId && entry.State != EntityState.Detached)
+            .ToList();
+
+        foreach (var localEntry in localEntries)
+        {
+            bool existsInDb = existingRoleIdsInDb.Contains(localEntry.Entity.RoleId);
+            if (localEntry.State == EntityState.Added)
+            {
+                // Remove stale local inserts that would conflict with DB or are no longer requested.
+                if (existsInDb || !normalizedRoleIds.Contains(localEntry.Entity.RoleId))
+                {
+                    localEntry.State = EntityState.Detached;
+                }
+            }
+            else if (localEntry.State == EntityState.Deleted &&
+                     existsInDb &&
+                     normalizedRoleIds.Contains(localEntry.Entity.RoleId))
+            {
+                // Keep requested role.
+                localEntry.State = EntityState.Unchanged;
+            }
+        }
+
+        IReadOnlyCollection<int> addedRoleIds = normalizedRoleIds.Except(existingRoleIdsInDb).ToList();
+        List<UserRole> removedRoles = existingRoles.Where(userRole => !normalizedRoleIds.Contains(userRole.RoleId)).ToList();
+
+        if (removedRoles.Count > 0)
+        {
+            _dbContext.UserRoles.RemoveRange(removedRoles);
+        }
+
+        DateTime now = DateTime.UtcNow;
+        foreach (int roleId in addedRoleIds)
+        {
+            bool alreadyTracked = _dbContext.ChangeTracker
+                .Entries<UserRole>()
+                .Any(entry =>
+                    entry.Entity.UserId == userId &&
+                    entry.Entity.RoleId == roleId &&
+                    entry.State != EntityState.Detached &&
+                    entry.State != EntityState.Deleted);
+            if (alreadyTracked)
+            {
+                continue;
+            }
+
+            _dbContext.UserRoles.Add(new UserRole
+            {
+                UserId = userId,
+                RoleId = roleId,
+                AssignedAt = now,
+                AssignedByUserId = actorUserId
+            });
+        }
+
+        return new RoleSyncResult
+        {
+            AddedRoleIds = addedRoleIds,
+            RemovedRoleIds = removedRoles.Select(userRole => userRole.RoleId).ToList()
+        };
+    }
+
+    private static string GetMostSpecificErrorMessage(Exception exception)
+    {
+        Exception current = exception;
+        while (current.InnerException is not null)
+        {
+            current = current.InnerException;
+        }
+
+        return current.Message;
     }
 
     private static bool HasActiveRole(User user, int roleId)

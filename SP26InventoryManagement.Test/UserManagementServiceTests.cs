@@ -367,6 +367,52 @@ public class UserManagementServiceTests
     }
 
     [Fact]
+    public async Task SetUserRolesAsync_ShouldNotThrow_WhenTrackedAddedRoleAlreadyExistsInContext()
+    {
+        TestHarness harness = CreateHarness();
+
+        harness.DbContext.UserRoles.Add(new UserRole
+        {
+            UserId = 4,
+            RoleId = 3,
+            AssignedAt = DateTime.UtcNow,
+            AssignedByUserId = 1
+        });
+
+        OperationResult result = await harness.Service.SetUserRolesAsync(
+            targetUserId: 4,
+            roleIds: [2, 3],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 4),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+
+        int roleCount = await harness.DbContext.UserRoles
+            .CountAsync(userRole => userRole.UserId == 4 && userRole.RoleId == 3);
+        Assert.Equal(1, roleCount);
+    }
+
+    [Fact]
+    public async Task SetUserRolesAsync_ShouldNotFail_WhenLocalTrackedAddedRoleDuplicatesExistingDbRole()
+    {
+        TestHarness harness = CreateHarness();
+
+        OperationResult result = await harness.Service.SetUserRolesAsync(
+            targetUserId: 1,
+            roleIds: [1],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
+            actorUserId: 2,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+
+        int roleCount = await harness.DbContext.UserRoles
+            .CountAsync(userRole => userRole.UserId == 1 && userRole.RoleId == 1);
+        Assert.Equal(1, roleCount);
+    }
+
+    [Fact]
     public async Task SearchUsersAsync_ShouldReturnRowVersion()
     {
         TestHarness harness = CreateHarness();

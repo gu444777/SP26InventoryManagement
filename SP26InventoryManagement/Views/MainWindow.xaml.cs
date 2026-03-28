@@ -130,7 +130,7 @@ namespace SP26InventoryManagement
             window.Activate();
         }
 
-        private void OpenTransferButton_OnClick(object sender, RoutedEventArgs e)
+        private void OpenReceiptStaffButton_OnClick(object sender, RoutedEventArgs e)
         {
             if (!_currentUserContext.IsAuthenticated)
             {
@@ -138,13 +138,11 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            bool canOpenTransferWindow =
-                _currentUserContext.IsInRole(StaffRoleCode) ||
-                _currentUserContext.IsInRole(AdminRoleCode);
-            if (!canOpenTransferWindow)
+            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenStaffWindow)
             {
                 MessageBox.Show(
-                    "Only WAREHOUSE_STAFF or ADMIN can open Transfer screen.",
+                    "Only WAREHOUSE_STAFF or ADMIN can open Receipt Staff screen.",
                     "Access Denied",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -156,7 +154,124 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            var window = app.Services.GetRequiredService<TransferWindow>();
+            var window = app.Services.GetRequiredService<ReceiptStaffWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenTransferButton_OnClick(object sender, RoutedEventArgs e)
+{
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+bool canOpenTransferWindow =
+                _currentUserContext.IsInRole(StaffRoleCode) ||
+                _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenTransferWindow)
+            {
+                MessageBox.Show(
+                    "Only WAREHOUSE_STAFF or ADMIN can open Transfer screen.",
+"Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+var window = app.Services.GetRequiredService<TransferWindow>();
+window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenReceiptManagerButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenManagerWindow = _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenManagerWindow)
+            {
+                MessageBox.Show(
+                    "Only MANAGER or ADMIN can open Receipt Manager screen.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<ReceiptManagerWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenStockSnapshotButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<StockSnapshotWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenStockLedgerButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<StockLedgerWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenExpiryAlertsButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<ExpiryAlertWindow>();
             window.Owner = this;
             window.Show();
             window.Activate();

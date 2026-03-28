@@ -10,6 +10,8 @@ public class StaffWarehouseAssignmentItemDto
 
     public bool IsActive { get; init; }
 
+    public byte[] RowVersion { get; init; } = Array.Empty<byte>();
+
     public int? CurrentWarehouseId { get; init; }
 
     public string CurrentWarehouseDisplay { get; init; } = "Unassigned";

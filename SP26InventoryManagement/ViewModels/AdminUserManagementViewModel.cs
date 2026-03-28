@@ -11,6 +11,7 @@ namespace SP26InventoryManagement.ViewModels;
 public class AdminUserManagementViewModel : ObservableObject
 {
     private const string AdminRoleCode = "ADMIN";
+    private const string ConcurrencyConflictPrefix = "Concurrency conflict";
 
     private readonly IAuthService _authService;
     private readonly IUserManagementService _userManagementService;
@@ -334,12 +335,18 @@ public class AdminUserManagementViewModel : ObservableObject
         OperationResult result = await _userManagementService.SetUserRolesAsync(
             targetUserId: targetUserId,
             roleIds: RoleSelections.Where(role => role.IsSelected).Select(role => role.RoleId).ToArray(),
+            expectedUserRowVersion: SelectedUser.RowVersion,
             actorUserId: _currentUserContext.UserId.Value,
             ct: CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -372,12 +379,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         ResetPasswordResult result = await _userManagementService.ResetPasswordAsync(
             SelectedUser.UserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, SelectedUser.UserId))
             {
                 return;
             }
@@ -390,6 +403,7 @@ public class AdminUserManagementViewModel : ObservableObject
             SelectedUser.Username,
             result.GeneratedPassword ?? string.Empty,
             "Password Reset");
+        await LoadUsersAsync(CurrentPage, SelectedUser.UserId);
     }
 
     private async Task DeactivateUserAsync()
@@ -414,12 +428,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         OperationResult result = await _userManagementService.DeactivateUserAsync(
             targetUserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -448,12 +468,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         OperationResult result = await _userManagementService.ReactivateUserAsync(
             targetUserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -571,6 +597,24 @@ public class AdminUserManagementViewModel : ObservableObject
         }
 
         return false;
+    }
+
+    private async Task<bool> HandleConcurrencyConflictAsync(string? errorMessage, int preferredUserId)
+    {
+        if (!IsConcurrencyConflict(errorMessage))
+        {
+            return false;
+        }
+
+        _messageService.ShowError(errorMessage ?? "Concurrency conflict. Please refresh and retry.");
+        await LoadUsersAsync(CurrentPage, preferredUserId);
+        return true;
+    }
+
+    private static bool IsConcurrencyConflict(string? errorMessage)
+    {
+        return !string.IsNullOrWhiteSpace(errorMessage) &&
+               errorMessage.Contains(ConcurrencyConflictPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private void TriggerLogout()

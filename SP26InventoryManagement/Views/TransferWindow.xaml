@@ -74,26 +74,30 @@
                         </StackPanel>
                     </WrapPanel>
 
-                    <WrapPanel Grid.Row="1" Margin="0,0,0,8">
-                        <StackPanel Width="420" Margin="0,0,10,0">
-                            <TextBlock Text="Product" />
-                            <ComboBox ItemsSource="{Binding Products}"
-                                      SelectedItem="{Binding SelectedProductToAdd}"
-                                      DisplayMemberPath="Display"
-                                      Height="30" />
-                        </StackPanel>
-                        <StackPanel Width="150" Margin="0,0,10,0">
-                            <TextBlock Text="Qty" />
-                            <TextBox Text="{Binding AddQtyInput, UpdateSourceTrigger=PropertyChanged}"
-                                     Height="30" />
-                        </StackPanel>
-                        <StackPanel Width="120">
-                            <TextBlock Text=" " />
-                            <Button Content="Add Line"
-                                    Command="{Binding AddLineCommand}"
-                                    Height="30" />
-                        </StackPanel>
-                    </WrapPanel>
+                    <StackPanel Grid.Row="1" Margin="0,0,0,8">
+                        <WrapPanel Margin="0,0,0,4">
+                            <StackPanel Width="420" Margin="0,0,10,0">
+                                <TextBlock Text="Product" />
+                                <ComboBox ItemsSource="{Binding Products}"
+                                          SelectedItem="{Binding SelectedProductToAdd}"
+                                          DisplayMemberPath="Display"
+                                          Height="30" />
+                            </StackPanel>
+                            <StackPanel Width="150" Margin="0,0,10,0">
+                                <TextBlock Text="Qty" />
+                                <TextBox Text="{Binding AddQtyInput, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30" />
+                            </StackPanel>
+                            <StackPanel Width="120">
+                                <TextBlock Text=" " />
+                                <Button Content="Add Line"
+                                        Command="{Binding AddLineCommand}"
+                                        Height="30" />
+                            </StackPanel>
+                        </WrapPanel>
+                        <TextBlock Text="{Binding SelectedProductAvailableQtyText}"
+                                   Foreground="#2F4F4F" />
+                    </StackPanel>
 
                     <DataGrid Grid.Row="2"
                               ItemsSource="{Binding CreateLines}"

@@ -119,6 +119,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.AssignOrChangeStaffWarehouseAsync(
             staffUserId: 5,
             warehouseId: 2,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 5),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -142,6 +143,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.AssignOrChangeStaffWarehouseAsync(
             staffUserId: 4,
             warehouseId: 2,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 4),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -163,6 +165,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.AssignOrChangeStaffWarehouseAsync(
             staffUserId: 3,
             warehouseId: 1,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 3),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -182,6 +185,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.AssignOrChangeStaffWarehouseAsync(
             staffUserId: 4,
             warehouseId: 2,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 4),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -199,6 +203,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.SetUserRolesAsync(
             targetUserId: 4,
             roleIds: [3],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 4),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -231,6 +236,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.SetUserRolesAsync(
             targetUserId: 1,
             roleIds: [3],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
             actorUserId: 2,
             CancellationToken.None);
 
@@ -259,6 +265,7 @@ public class UserManagementServiceTests
 
         OperationResult result = await harness.Service.DeactivateUserAsync(
             targetUserId: 1,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
             actorUserId: 2,
             CancellationToken.None);
 
@@ -280,6 +287,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.SetUserRolesAsync(
             targetUserId: 1,
             roleIds: [3],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
             actorUserId: 2,
             CancellationToken.None);
 
@@ -303,6 +311,7 @@ public class UserManagementServiceTests
 
         OperationResult result = await harness.Service.DeactivateUserAsync(
             targetUserId: 1,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
             actorUserId: 2,
             CancellationToken.None);
 
@@ -326,6 +335,7 @@ public class UserManagementServiceTests
 
         OperationResult result = await harness.Service.ReactivateUserAsync(
             targetUserId: 3,
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 3),
             actorUserId: 1,
             CancellationToken.None);
 
@@ -346,6 +356,7 @@ public class UserManagementServiceTests
         OperationResult result = await harness.Service.SetUserRolesAsync(
             targetUserId: 1,
             roleIds: [1],
+            expectedUserRowVersion: GetUserRowVersion(harness.DbContext, 1),
             actorUserId: 2,
             CancellationToken.None);
 
@@ -353,6 +364,133 @@ public class UserManagementServiceTests
 
         User userAfter = await harness.DbContext.Users.SingleAsync(user => user.UserId == 1);
         Assert.Equal(originalAuthVersion, userAfter.AuthVersion);
+    }
+
+    [Fact]
+    public async Task SearchUsersAsync_ShouldReturnRowVersion()
+    {
+        TestHarness harness = CreateHarness();
+
+        PagedResult<UserListItemDto> result = await harness.Service.SearchUsersAsync(
+            new UserSearchCriteria
+            {
+                PageNumber = 1,
+                PageSize = 20
+            },
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.NotEmpty(result.Items);
+        Assert.All(result.Items, item => Assert.NotEmpty(item.RowVersion));
+    }
+
+    [Fact]
+    public async Task GetStaffWarehouseAssignmentsAsync_ShouldReturnRowVersion()
+    {
+        TestHarness harness = CreateHarness();
+
+        PagedResult<StaffWarehouseAssignmentItemDto> result = await harness.Service.GetStaffWarehouseAssignmentsAsync(
+            new StaffWarehouseAssignmentSearchCriteria
+            {
+                PageNumber = 1,
+                PageSize = 20
+            },
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.NotEmpty(result.Items);
+        Assert.All(result.Items, item => Assert.NotEmpty(item.RowVersion));
+    }
+
+    [Fact]
+    public async Task SetUserRolesAsync_ShouldFail_WhenExpectedRowVersionIsStale()
+    {
+        TestHarness harness = CreateHarness();
+
+        OperationResult result = await harness.Service.SetUserRolesAsync(
+            targetUserId: 4,
+            roleIds: [3],
+            expectedUserRowVersion: [9],
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Concurrency conflict", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task DeactivateUserAsync_ShouldFail_WhenExpectedRowVersionIsStale()
+    {
+        TestHarness harness = CreateHarness();
+
+        OperationResult result = await harness.Service.DeactivateUserAsync(
+            targetUserId: 3,
+            expectedUserRowVersion: [9],
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Concurrency conflict", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task ReactivateUserAsync_ShouldFail_WhenExpectedRowVersionIsStale()
+    {
+        TestHarness harness = CreateHarness();
+
+        User target = await harness.DbContext.Users.SingleAsync(user => user.UserId == 3);
+        target.IsActive = false;
+        await harness.DbContext.SaveChangesAsync();
+
+        OperationResult result = await harness.Service.ReactivateUserAsync(
+            targetUserId: 3,
+            expectedUserRowVersion: [9],
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Concurrency conflict", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ShouldFail_WhenExpectedRowVersionIsStale()
+    {
+        TestHarness harness = CreateHarness();
+
+        ResetPasswordResult result = await harness.Service.ResetPasswordAsync(
+            targetUserId: 3,
+            expectedUserRowVersion: [9],
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Concurrency conflict", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task AssignOrChangeStaffWarehouseAsync_ShouldFail_WhenExpectedRowVersionIsStale()
+    {
+        TestHarness harness = CreateHarness();
+
+        OperationResult result = await harness.Service.AssignOrChangeStaffWarehouseAsync(
+            staffUserId: 4,
+            warehouseId: 2,
+            expectedUserRowVersion: [9],
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Concurrency conflict", result.ErrorMessage ?? string.Empty);
+    }
+
+    private static byte[] GetUserRowVersion(Sp26inventoryManagementDbContext dbContext, int userId)
+    {
+        return dbContext.Users
+            .AsNoTracking()
+            .Where(user => user.UserId == userId)
+            .Select(user => user.RowVersion)
+            .Single()
+            .ToArray();
     }
 
     private static TestHarness CreateHarness()

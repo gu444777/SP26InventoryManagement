@@ -10,6 +10,8 @@ public interface ITransferService
 
     Task<IReadOnlyList<ProductLookupDto>> GetActiveProductsAsync(CancellationToken ct);
 
+    Task<decimal> GetAvailableQtyAsync(int sourceWarehouseId, int productId, DateTime requestDate, int actorUserId, CancellationToken ct);
+
     Task<PreviewCreateTransferLotSuggestionResult> PreviewCreateTransferLotSuggestionAsync(
         TransferSuggestionRequestDto request,
         int actorUserId,

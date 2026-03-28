@@ -11,6 +11,7 @@ public class UserManagementService : IUserManagementService
     private const string AdminRoleCode = "ADMIN";
     private const string StaffRoleCode = "WAREHOUSE_STAFF";
     private const string ActiveAdminGuardMessage = "Operation denied. System must always have at least one active ADMIN.";
+    private const string ConcurrencyConflictPrefix = "Concurrency conflict.";
 
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
@@ -114,7 +115,8 @@ public class UserManagementService : IUserManagementService
                 user.UserId,
                 user.Username,
                 user.FullName,
-                user.IsActive
+                user.IsActive,
+                user.RowVersion
             })
             .ToListAsync(ct);
 
@@ -146,6 +148,7 @@ public class UserManagementService : IUserManagementService
                     Username = user.Username,
                     FullName = user.FullName,
                     IsActive = user.IsActive,
+                    RowVersion = user.RowVersion.ToArray(),
                     CurrentWarehouseId = hasAssignment ? assignment.WarehouseId : null,
                     CurrentWarehouseDisplay = hasAssignment ? assignment.WarehouseDisplay : "Unassigned"
                 };
@@ -161,7 +164,12 @@ public class UserManagementService : IUserManagementService
         };
     }
 
-    public async Task<OperationResult> AssignOrChangeStaffWarehouseAsync(int staffUserId, int warehouseId, int actorUserId, CancellationToken ct)
+    public async Task<OperationResult> AssignOrChangeStaffWarehouseAsync(
+        int staffUserId,
+        int warehouseId,
+        byte[] expectedUserRowVersion,
+        int actorUserId,
+        CancellationToken ct)
     {
         OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
@@ -205,6 +213,12 @@ public class UserManagementService : IUserManagementService
             {
                 await dbTransaction.RollbackAsync(ct);
                 return OperationResult.Failure("Target user not found.");
+            }
+
+            if (!IsUserRowVersionMatch(staffUser, expectedUserRowVersion))
+            {
+                await dbTransaction.RollbackAsync(ct);
+                return OperationResult.Failure(BuildConcurrencyConflictMessage("User data changed. Please refresh and retry."));
             }
 
             bool hasStaffRole = HasActiveRole(staffUser, staffRoleId);
@@ -272,7 +286,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return OperationResult.Failure("Warehouse assignment conflict. Please refresh and retry.");
+            return OperationResult.Failure(BuildConcurrencyConflictMessage("Warehouse assignment changed by another action. Please refresh and retry."));
         }
         catch (DbUpdateException)
         {
@@ -417,7 +431,12 @@ public class UserManagementService : IUserManagementService
         return CreateUserResult.Success(user.UserId, generatedPassword);
     }
 
-    public async Task<OperationResult> SetUserRolesAsync(int targetUserId, IReadOnlyCollection<int> roleIds, int actorUserId, CancellationToken ct)
+    public async Task<OperationResult> SetUserRolesAsync(
+        int targetUserId,
+        IReadOnlyCollection<int> roleIds,
+        byte[] expectedUserRowVersion,
+        int actorUserId,
+        CancellationToken ct)
     {
         OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
@@ -462,6 +481,12 @@ public class UserManagementService : IUserManagementService
             {
                 await dbTransaction.RollbackAsync(ct);
                 return OperationResult.Failure("Target user not found.");
+            }
+
+            if (!IsUserRowVersionMatch(targetUser, expectedUserRowVersion))
+            {
+                await dbTransaction.RollbackAsync(ct);
+                return OperationResult.Failure(BuildConcurrencyConflictMessage("User data changed. Please refresh and retry."));
             }
 
             bool hasAdminBefore = targetUser.IsActive && HasActiveAdminRole(targetUser, adminRoleId.Value);
@@ -520,7 +545,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return OperationResult.Failure("Role update conflict. Please refresh and retry.");
+            return OperationResult.Failure(BuildConcurrencyConflictMessage("Role update was modified by another action. Please refresh and retry."));
         }
         catch (DbUpdateException)
         {
@@ -578,7 +603,11 @@ public class UserManagementService : IUserManagementService
         return OperationResult.Success();
     }
 
-    public async Task<ResetPasswordResult> ResetPasswordAsync(int targetUserId, int actorUserId, CancellationToken ct)
+    public async Task<ResetPasswordResult> ResetPasswordAsync(
+        int targetUserId,
+        byte[] expectedUserRowVersion,
+        int actorUserId,
+        CancellationToken ct)
     {
         OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
@@ -592,6 +621,11 @@ public class UserManagementService : IUserManagementService
             return ResetPasswordResult.Failure("Target user not found.");
         }
 
+        if (!IsUserRowVersionMatch(targetUser, expectedUserRowVersion))
+        {
+            return ResetPasswordResult.Failure(BuildConcurrencyConflictMessage("User data changed. Please refresh and retry."));
+        }
+
         string generatedPassword = _passwordHasher.GenerateRandomPassword();
 
         try
@@ -602,7 +636,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return ResetPasswordResult.Failure("Password reset conflict. Please refresh and retry.");
+            return ResetPasswordResult.Failure(BuildConcurrencyConflictMessage("Password reset changed by another action. Please refresh and retry."));
         }
         catch (DbUpdateException)
         {
@@ -624,7 +658,11 @@ public class UserManagementService : IUserManagementService
         return ResetPasswordResult.Success(generatedPassword);
     }
 
-    public async Task<OperationResult> DeactivateUserAsync(int targetUserId, int actorUserId, CancellationToken ct)
+    public async Task<OperationResult> DeactivateUserAsync(
+        int targetUserId,
+        byte[] expectedUserRowVersion,
+        int actorUserId,
+        CancellationToken ct)
     {
         OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
@@ -653,6 +691,12 @@ public class UserManagementService : IUserManagementService
             {
                 await dbTransaction.RollbackAsync(ct);
                 return OperationResult.Failure("Target user not found.");
+            }
+
+            if (!IsUserRowVersionMatch(targetUser, expectedUserRowVersion))
+            {
+                await dbTransaction.RollbackAsync(ct);
+                return OperationResult.Failure(BuildConcurrencyConflictMessage("User data changed. Please refresh and retry."));
             }
 
             if (!targetUser.IsActive)
@@ -692,7 +736,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return OperationResult.Failure("Deactivate conflict. Please refresh and retry.");
+            return OperationResult.Failure(BuildConcurrencyConflictMessage("Deactivate was modified by another action. Please refresh and retry."));
         }
         catch (DbUpdateException)
         {
@@ -714,7 +758,11 @@ public class UserManagementService : IUserManagementService
         return OperationResult.Success();
     }
 
-    public async Task<OperationResult> ReactivateUserAsync(int targetUserId, int actorUserId, CancellationToken ct)
+    public async Task<OperationResult> ReactivateUserAsync(
+        int targetUserId,
+        byte[] expectedUserRowVersion,
+        int actorUserId,
+        CancellationToken ct)
     {
         OperationResult authorization = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, AdminRoleCode, ct);
         if (!authorization.IsSuccess)
@@ -726,6 +774,11 @@ public class UserManagementService : IUserManagementService
         if (targetUser is null)
         {
             return OperationResult.Failure("Target user not found.");
+        }
+
+        if (!IsUserRowVersionMatch(targetUser, expectedUserRowVersion))
+        {
+            return OperationResult.Failure(BuildConcurrencyConflictMessage("User data changed. Please refresh and retry."));
         }
 
         if (targetUser.IsActive)
@@ -742,7 +795,7 @@ public class UserManagementService : IUserManagementService
         }
         catch (DbUpdateConcurrencyException)
         {
-            return OperationResult.Failure("Reactivate conflict. Please refresh and retry.");
+            return OperationResult.Failure(BuildConcurrencyConflictMessage("Reactivate was modified by another action. Please refresh and retry."));
         }
         catch (DbUpdateException)
         {
@@ -779,6 +832,21 @@ public class UserManagementService : IUserManagementService
             .CountAsync(user => user.UserRoleUsers.Any(userRole =>
                 userRole.RoleId == adminRoleId &&
                 userRole.Role.IsActive), ct);
+    }
+
+    private static bool IsUserRowVersionMatch(User user, byte[] expectedUserRowVersion)
+    {
+        if (expectedUserRowVersion.Length == 0 || user.RowVersion.Length == 0)
+        {
+            return false;
+        }
+
+        return user.RowVersion.SequenceEqual(expectedUserRowVersion);
+    }
+
+    private static string BuildConcurrencyConflictMessage(string detail)
+    {
+        return $"{ConcurrencyConflictPrefix} {detail}";
     }
 
     private async Task<int> ResolveActiveRoleIdByCodeAsync(string roleCode, CancellationToken ct)

@@ -102,6 +102,50 @@ public class TransferService : ITransferService
             .ToListAsync(ct);
     }
 
+    public async Task<decimal> GetAvailableQtyAsync(
+        int sourceWarehouseId,
+        int productId,
+        DateTime requestDate,
+        int actorUserId,
+        CancellationToken ct)
+    {
+        TransferAuthorizationContext authorization = await EnsureStaffOrAdminAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        if (!authorization.IsAdmin && authorization.AssignedWarehouseId != sourceWarehouseId)
+        {
+            throw new UnauthorizedAccessException("Access denied. Source warehouse must match your warehouse assignment.");
+        }
+
+        if (sourceWarehouseId <= 0 || productId <= 0)
+        {
+            return 0;
+        }
+
+        DateOnly requestDay = DateOnly.FromDateTime((requestDate == default ? DateTime.UtcNow : requestDate).Date);
+
+        decimal? availableQty = await _dbContext.StockBalances
+            .AsNoTracking()
+            .Where(balance =>
+                balance.WarehouseId == sourceWarehouseId &&
+                balance.ProductId == productId &&
+                balance.ProductLot.Status != ProductLotStatusLocked &&
+                (!balance.ProductLot.ExpiryDate.HasValue || balance.ProductLot.ExpiryDate.Value >= requestDay))
+            .Select(balance => (decimal?)(balance.AvailableQty ?? (balance.OnHandQty - balance.AllocatedQty)))
+            .SumAsync(ct);
+
+        decimal safeAvailableQty = availableQty ?? 0m;
+        if (safeAvailableQty <= 0)
+        {
+            return 0;
+        }
+
+        return decimal.Round(safeAvailableQty, 3);
+    }
+
     public async Task<PreviewCreateTransferLotSuggestionResult> PreviewCreateTransferLotSuggestionAsync(
         TransferSuggestionRequestDto request,
         int actorUserId,
@@ -286,6 +330,11 @@ public class TransferService : ITransferService
         DateTime now = DateTime.UtcNow;
         DateTime requestDate = request.RequestDate == default ? now : request.RequestDate;
         DateOnly requestDay = DateOnly.FromDateTime(requestDate.Date);
+        if (request.RequiredDate.HasValue && request.RequiredDate.Value <= requestDay)
+        {
+            return CreateTransferResult.Failure("Required date must be later than request date.");
+        }
+
         string transferNo = await GenerateTransferNoAsync(requestDate, ct);
 
         await using IDbContextTransaction dbTransaction = await BeginTransactionAsync(serializable: true, ct);

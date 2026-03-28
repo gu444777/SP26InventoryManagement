@@ -36,9 +36,11 @@ public class TransferManagementViewModel : ObservableObject
     private string _receiptStatusMessage = string.Empty;
     private string _addQtyInput = string.Empty;
     private string _remarks = string.Empty;
+    private string _selectedProductAvailableQtyText = "Available Qty: -";
     private DateTime _requestDate = DateTime.Today;
     private DateTime? _requiredDate = DateTime.Today.AddDays(1);
 
+    private int _availableQtyRequestVersion;
     private int _destinationWarehouseRequestVersion;
     private int _sourceDetailRequestVersion;
     private int _destinationDetailRequestVersion;
@@ -119,6 +121,7 @@ public class TransferManagementViewModel : ObservableObject
                 ClearPreview();
                 RaiseCommandStates();
                 _ = RefreshDestinationWarehousesAsync();
+                _ = RefreshSelectedProductAvailableQtyAsync();
             }
         }
     }
@@ -144,6 +147,7 @@ public class TransferManagementViewModel : ObservableObject
             if (SetProperty(ref _selectedProductToAdd, value))
             {
                 _addLineCommand.RaiseCanExecuteChanged();
+                _ = RefreshSelectedProductAvailableQtyAsync();
             }
         }
     }
@@ -216,6 +220,7 @@ public class TransferManagementViewModel : ObservableObject
             {
                 ClearPreview();
                 RaiseCommandStates();
+                _ = RefreshSelectedProductAvailableQtyAsync();
             }
         }
     }
@@ -223,7 +228,13 @@ public class TransferManagementViewModel : ObservableObject
     public DateTime? RequiredDate
     {
         get => _requiredDate;
-        set => SetProperty(ref _requiredDate, value);
+        set
+        {
+            if (SetProperty(ref _requiredDate, value))
+            {
+                RaiseCommandStates();
+            }
+        }
     }
 
     public bool IsBusy
@@ -254,6 +265,12 @@ public class TransferManagementViewModel : ObservableObject
     {
         get => _receiptStatusMessage;
         private set => SetProperty(ref _receiptStatusMessage, value);
+    }
+
+    public string SelectedProductAvailableQtyText
+    {
+        get => _selectedProductAvailableQtyText;
+        private set => SetProperty(ref _selectedProductAvailableQtyText, value);
     }
 
     public bool HasTransferPermission =>
@@ -312,6 +329,7 @@ public class TransferManagementViewModel : ObservableObject
             SelectedProductToAdd = Products.FirstOrDefault();
 
             await RefreshDestinationWarehousesAsync();
+            await RefreshSelectedProductAvailableQtyAsync();
             await RefreshSourceDispatchQueueAsync(setBusyState: false);
             await RefreshDestinationReceiptQueueAsync(setBusyState: false);
 
@@ -359,7 +377,6 @@ public class TransferManagementViewModel : ObservableObject
             RequestedQty = decimal.Round(qty, 3)
         });
 
-        AddQtyInput = string.Empty;
         ClearPreview();
         RaiseCommandStates();
     }
@@ -397,6 +414,12 @@ public class TransferManagementViewModel : ObservableObject
         if (SelectedSourceWarehouse is null || SelectedDestinationWarehouse is null || CreateLines.Count == 0)
         {
             _messageService.ShowError("Please select source, destination and add at least one product line.");
+            return;
+        }
+
+        if (!ValidateRequestAndRequiredDate(out string dateValidationError))
+        {
+            _messageService.ShowError(dateValidationError);
             return;
         }
 
@@ -491,6 +514,12 @@ public class TransferManagementViewModel : ObservableObject
         if (SelectedSourceWarehouse is null || SelectedDestinationWarehouse is null)
         {
             _messageService.ShowError("Please select source and destination warehouse.");
+            return;
+        }
+
+        if (!ValidateRequestAndRequiredDate(out string dateValidationError))
+        {
+            _messageService.ShowError(dateValidationError);
             return;
         }
 
@@ -1048,6 +1077,7 @@ public class TransferManagementViewModel : ObservableObject
         return !IsBusy
             && HasTransferPermission
             && _currentUserContext.UserId.HasValue
+            && IsRequiredDateValidForCommand()
             && SelectedSourceWarehouse is not null
             && SelectedDestinationWarehouse is not null
             && CreateLines.Count > 0;
@@ -1058,6 +1088,7 @@ public class TransferManagementViewModel : ObservableObject
         return !IsBusy
             && HasTransferPermission
             && _currentUserContext.UserId.HasValue
+            && IsRequiredDateValidForCommand()
             && SelectedSourceWarehouse is not null
             && SelectedDestinationWarehouse is not null
             && CreateLines.Count > 0
@@ -1217,6 +1248,23 @@ public class TransferManagementViewModel : ObservableObject
         return Math.Abs(left - right) <= 0.0005m;
     }
 
+    private bool ValidateRequestAndRequiredDate(out string errorMessage)
+    {
+        errorMessage = string.Empty;
+        if (RequiredDate.HasValue && RequiredDate.Value.Date <= RequestDate.Date)
+        {
+            errorMessage = "Required date must be later than request date.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool IsRequiredDateValidForCommand()
+    {
+        return !RequiredDate.HasValue || RequiredDate.Value.Date > RequestDate.Date;
+    }
+
     private void ClearPreview()
     {
         ReplacePreviewAllocations([]);
@@ -1236,6 +1284,71 @@ public class TransferManagementViewModel : ObservableObject
     {
         if (SetProperty(ref field, value))
         {
+            _addLineCommand.RaiseCanExecuteChanged();
+        }
+    }
+
+    private async Task RefreshSelectedProductAvailableQtyAsync()
+    {
+        int requestVersion = Interlocked.Increment(ref _availableQtyRequestVersion);
+
+        if (!_currentUserContext.IsAuthenticated || !_currentUserContext.UserId.HasValue)
+        {
+            SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        WarehouseLookupDto? selectedSourceWarehouse = SelectedSourceWarehouse;
+        ProductLookupDto? selectedProduct = SelectedProductToAdd;
+        if (selectedSourceWarehouse is null || selectedProduct is null)
+        {
+            SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
+            return;
+        }
+
+        try
+        {
+            decimal availableQty = await ExecuteTransferServiceCallAsync(
+                () => _transferService.GetAvailableQtyAsync(
+                    selectedSourceWarehouse.WarehouseId,
+                    selectedProduct.ProductId,
+                    RequestDate,
+                    _currentUserContext.UserId.Value,
+                    CancellationToken.None));
+
+            if (requestVersion != _availableQtyRequestVersion)
+            {
+                return;
+            }
+
+            string uom = string.IsNullOrWhiteSpace(selectedProduct.BaseUom)
+                ? string.Empty
+                : $" {selectedProduct.BaseUom}";
+            SelectedProductAvailableQtyText = $"Available Qty: {availableQty:N3}{uom}";
+            _addLineCommand.RaiseCanExecuteChanged();
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            if (requestVersion != _availableQtyRequestVersion)
+            {
+                return;
+            }
+
+            SelectedProductAvailableQtyText = "Available Qty: -";
+            _addLineCommand.RaiseCanExecuteChanged();
+            _messageService.ShowError(ex.Message);
+            TriggerLogout();
+        }
+        catch (Exception ex)
+        {
+            if (requestVersion != _availableQtyRequestVersion)
+            {
+                return;
+            }
+
+            SelectedProductAvailableQtyText = $"Available Qty: unavailable ({ex.Message})";
             _addLineCommand.RaiseCanExecuteChanged();
         }
     }

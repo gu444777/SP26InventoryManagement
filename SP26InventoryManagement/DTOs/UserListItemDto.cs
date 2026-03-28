@@ -16,6 +16,8 @@ public class UserListItemDto
 
     public DateTime? LastLoginAt { get; init; }
 
+    public byte[] RowVersion { get; init; } = Array.Empty<byte>();
+
     public IReadOnlyList<RoleOptionDto> Roles { get; init; } = Array.Empty<RoleOptionDto>();
 
     public string RolesDisplay => string.Join(", ", Roles.Select(role => role.RoleCode));

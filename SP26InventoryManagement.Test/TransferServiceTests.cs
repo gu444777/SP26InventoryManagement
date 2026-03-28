@@ -101,6 +101,200 @@ public class TransferServiceTests
     }
 
     [Fact]
+    public async Task CreateTransferAsync_ShouldFailWhenRequiredDateIsNotLaterThanRequestDate()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedSourceLots(
+            harness.DbContext,
+            (lotId: 2251, lotCode: "LOT-A", onHandQty: 5m, unitCost: 10m, receivedDaysAgo: 10, expiryInDays: 5));
+
+        DateTime requestDate = DateTime.UtcNow.Date;
+        CreateTransferResult result = await harness.Service.CreateTransferAsync(
+            BuildCreateRequest(
+                requestedQty: 5m,
+                firstLotId: 2251,
+                firstQty: 5m,
+                secondLotId: 2251,
+                secondQty: 0m,
+                requestDate: requestDate,
+                requiredDate: DateOnly.FromDateTime(requestDate),
+                includeRequiredDate: true),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("Required date must be later than request date", result.ErrorMessage ?? string.Empty);
+    }
+
+    [Fact]
+    public async Task CreateTransferAsync_ShouldAllowNullRequiredDate()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedSourceLots(
+            harness.DbContext,
+            (lotId: 2252, lotCode: "LOT-A", onHandQty: 5m, unitCost: 10m, receivedDaysAgo: 10, expiryInDays: 5));
+
+        DateTime requestDate = DateTime.UtcNow.Date;
+        CreateTransferResult result = await harness.Service.CreateTransferAsync(
+            BuildCreateRequest(
+                requestedQty: 5m,
+                firstLotId: 2252,
+                firstQty: 5m,
+                secondLotId: 2252,
+                secondQty: 0m,
+                requestDate: requestDate,
+                requiredDate: null,
+                includeRequiredDate: false),
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.True(result.IsSuccess, result.ErrorMessage);
+        TransferOrder order = await harness.DbContext.TransferOrders
+            .SingleAsync(x => x.TransferOrderId == result.TransferOrderId!.Value);
+        Assert.Null(order.RequiredDate);
+    }
+
+    [Fact]
+    public async Task GetAvailableQtyAsync_ShouldExcludeLockedAndExpiredLots()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        DateTime now = DateTime.UtcNow;
+
+        harness.DbContext.ProductLots.AddRange(
+            new ProductLot
+            {
+                ProductLotId = 2301,
+                WarehouseId = 1,
+                ProductId = 1,
+                LotCode = "LOT-ACTIVE",
+                ReceivedDate = DateOnly.FromDateTime(now.Date.AddDays(-10)),
+                ExpiryDate = DateOnly.FromDateTime(now.Date.AddDays(5)),
+                UnitCost = 10m,
+                InitialQty = 10m,
+                RemainingQty = 10m,
+                Status = "ACTIVE",
+                CreatedAt = now,
+                RowVersion = [1]
+            },
+            new ProductLot
+            {
+                ProductLotId = 2302,
+                WarehouseId = 1,
+                ProductId = 1,
+                LotCode = "LOT-LOCKED",
+                ReceivedDate = DateOnly.FromDateTime(now.Date.AddDays(-8)),
+                ExpiryDate = DateOnly.FromDateTime(now.Date.AddDays(5)),
+                UnitCost = 10m,
+                InitialQty = 5m,
+                RemainingQty = 5m,
+                Status = "LOCKED",
+                CreatedAt = now,
+                RowVersion = [1]
+            },
+            new ProductLot
+            {
+                ProductLotId = 2303,
+                WarehouseId = 1,
+                ProductId = 1,
+                LotCode = "LOT-EXPIRED",
+                ReceivedDate = DateOnly.FromDateTime(now.Date.AddDays(-7)),
+                ExpiryDate = DateOnly.FromDateTime(now.Date.AddDays(-1)),
+                UnitCost = 10m,
+                InitialQty = 4m,
+                RemainingQty = 4m,
+                Status = "ACTIVE",
+                CreatedAt = now,
+                RowVersion = [1]
+            },
+            new ProductLot
+            {
+                ProductLotId = 2304,
+                WarehouseId = 1,
+                ProductId = 1,
+                LotCode = "LOT-NO-EXP",
+                ReceivedDate = DateOnly.FromDateTime(now.Date.AddDays(-6)),
+                ExpiryDate = null,
+                UnitCost = 10m,
+                InitialQty = 3m,
+                RemainingQty = 3m,
+                Status = "ACTIVE",
+                CreatedAt = now,
+                RowVersion = [1]
+            });
+
+        harness.DbContext.StockBalances.AddRange(
+            new StockBalance
+            {
+                WarehouseId = 1,
+                ProductId = 1,
+                ProductLotId = 2301,
+                OnHandQty = 10m,
+                AllocatedQty = 2m,
+                AvailableQty = null,
+                UpdatedAt = now,
+                RowVersion = [1]
+            },
+            new StockBalance
+            {
+                WarehouseId = 1,
+                ProductId = 1,
+                ProductLotId = 2302,
+                OnHandQty = 5m,
+                AllocatedQty = 0m,
+                AvailableQty = null,
+                UpdatedAt = now,
+                RowVersion = [1]
+            },
+            new StockBalance
+            {
+                WarehouseId = 1,
+                ProductId = 1,
+                ProductLotId = 2303,
+                OnHandQty = 4m,
+                AllocatedQty = 0m,
+                AvailableQty = null,
+                UpdatedAt = now,
+                RowVersion = [1]
+            },
+            new StockBalance
+            {
+                WarehouseId = 1,
+                ProductId = 1,
+                ProductLotId = 2304,
+                OnHandQty = 3m,
+                AllocatedQty = 1m,
+                AvailableQty = null,
+                UpdatedAt = now,
+                RowVersion = [1]
+            });
+
+        await harness.DbContext.SaveChangesAsync();
+
+        decimal availableQty = await harness.Service.GetAvailableQtyAsync(
+            sourceWarehouseId: 1,
+            productId: 1,
+            requestDate: now.Date,
+            actorUserId: 1,
+            CancellationToken.None);
+
+        Assert.Equal(10m, availableQty);
+    }
+
+    [Fact]
+    public async Task GetAvailableQtyAsync_ShouldRejectStaffFromDifferentWarehouse()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            harness.Service.GetAvailableQtyAsync(
+                sourceWarehouseId: 2,
+                productId: 1,
+                requestDate: DateTime.UtcNow.Date,
+                actorUserId: 1,
+                CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ConfirmSourceDispatchAsync_ShouldDeductSourceStockAndConsumeReservation()
     {
         TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
@@ -503,8 +697,16 @@ public class TransferServiceTests
         long firstLotId,
         decimal firstQty,
         long secondLotId,
-        decimal secondQty)
+        decimal secondQty,
+        DateTime? requestDate = null,
+        DateOnly? requiredDate = null,
+        bool includeRequiredDate = true)
     {
+        DateTime resolvedRequestDate = (requestDate ?? DateTime.UtcNow).Date;
+        DateOnly? resolvedRequiredDate = includeRequiredDate
+            ? (requiredDate ?? DateOnly.FromDateTime(resolvedRequestDate.AddDays(1)))
+            : null;
+
         List<TransferLotSelectionDto> selections =
         [
             new TransferLotSelectionDto
@@ -527,8 +729,8 @@ public class TransferServiceTests
         {
             SourceWarehouseId = 1,
             DestinationWarehouseId = 2,
-            RequestDate = DateTime.UtcNow.Date,
-            RequiredDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(1)),
+            RequestDate = resolvedRequestDate,
+            RequiredDate = resolvedRequiredDate,
             Remarks = "Unit test transfer",
             Lines =
             [

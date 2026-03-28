@@ -9,6 +9,7 @@ namespace SP26InventoryManagement.ViewModels;
 public class StaffWarehouseAssignmentViewModel : ObservableObject
 {
     private const string AdminRoleCode = "ADMIN";
+    private const string ConcurrencyConflictPrefix = "Concurrency conflict";
 
     private readonly IAuthService _authService;
     private readonly IUserManagementService _userManagementService;
@@ -261,12 +262,18 @@ public class StaffWarehouseAssignmentViewModel : ObservableObject
         OperationResult result = await _userManagementService.AssignOrChangeStaffWarehouseAsync(
             SelectedStaffUser.UserId,
             SelectedWarehouse.WarehouseId,
+            SelectedStaffUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, SelectedStaffUser.UserId))
             {
                 return;
             }
@@ -344,6 +351,24 @@ public class StaffWarehouseAssignmentViewModel : ObservableObject
         }
 
         return false;
+    }
+
+    private async Task<bool> HandleConcurrencyConflictAsync(string? errorMessage, int preferredUserId)
+    {
+        if (!IsConcurrencyConflict(errorMessage))
+        {
+            return false;
+        }
+
+        _messageService.ShowError(errorMessage ?? "Concurrency conflict. Please refresh and retry.");
+        await LoadStaffUsersAsync(CurrentPage, preferredUserId);
+        return true;
+    }
+
+    private static bool IsConcurrencyConflict(string? errorMessage)
+    {
+        return !string.IsNullOrWhiteSpace(errorMessage) &&
+               errorMessage.Contains(ConcurrencyConflictPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private void TriggerLogout()

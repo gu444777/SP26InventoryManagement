@@ -953,6 +953,7 @@ public class TransferService : ITransferService
             }
 
             DateTime now = DateTime.UtcNow;
+            DateOnly destinationReceivedDate = DateOnly.FromDateTime(now);
             Dictionary<long, TransferOrderLine> lineById = lines.ToDictionary(line => line.TransferOrderLineId);
 
             List<DestinationLotKey> destinationLotKeys = allocations
@@ -984,8 +985,7 @@ public class TransferService : ITransferService
 
                 if (destinationLotMap.TryGetValue(key, out ProductLot? existingLot))
                 {
-                    if (existingLot.ReceivedDate != allocation.ReceivedDateSnapshot ||
-                        existingLot.ExpiryDate != allocation.ExpiryDateSnapshot ||
+                    if (existingLot.ExpiryDate != allocation.ExpiryDateSnapshot ||
                         existingLot.UnitCost != allocation.UnitCost)
                     {
                         return ConfirmDestinationReceiptResult.Failure(
@@ -1006,7 +1006,7 @@ public class TransferService : ITransferService
                     WarehouseId = transferOrder.DestinationWarehouseId,
                     ProductId = line.ProductId,
                     LotCode = allocation.LotCodeSnapshot,
-                    ReceivedDate = allocation.ReceivedDateSnapshot,
+                    ReceivedDate = destinationReceivedDate,
                     ExpiryDate = allocation.ExpiryDateSnapshot,
                     UnitCost = allocation.UnitCost,
                     InitialQty = 0,

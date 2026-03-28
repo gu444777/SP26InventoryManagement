@@ -397,6 +397,77 @@ public class TransferServiceTests
     }
 
     [Fact]
+    public async Task ConfirmDestinationReceiptAsync_ShouldReuseDestinationLotWhenOnlyReceivedDateDiffers()
+    {
+        TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);
+        SeedSourceLots(
+            harness.DbContext,
+            (lotId: 4051, lotCode: "R240220B", onHandQty: 10m, unitCost: 178000m, receivedDaysAgo: 30, expiryInDays: null));
+
+        DateTime now = DateTime.UtcNow;
+        harness.DbContext.ProductLots.Add(new ProductLot
+        {
+            ProductLotId = 5051,
+            WarehouseId = 2,
+            ProductId = 1,
+            LotCode = "R240220B",
+            ReceivedDate = DateOnly.FromDateTime(now.Date.AddDays(-1)),
+            ExpiryDate = null,
+            UnitCost = 178000m,
+            InitialQty = 3m,
+            RemainingQty = 3m,
+            Status = "ACTIVE",
+            CreatedAt = now,
+            RowVersion = [1]
+        });
+
+        harness.DbContext.StockBalances.Add(new StockBalance
+        {
+            WarehouseId = 2,
+            ProductId = 1,
+            ProductLotId = 5051,
+            OnHandQty = 3m,
+            AllocatedQty = 0,
+            UpdatedAt = now,
+            RowVersion = [1]
+        });
+        harness.DbContext.SaveChanges();
+
+        CreateTransferResult createResult = await harness.Service.CreateTransferAsync(
+            BuildCreateRequest(requestedQty: 2m, firstLotId: 4051, firstQty: 2m, secondLotId: 4051, secondQty: 0m),
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(createResult.IsSuccess);
+
+        ConfirmSourceDispatchResult dispatchResult = await harness.Service.ConfirmSourceDispatchAsync(
+            createResult.TransferOrderId!.Value,
+            actorUserId: 1,
+            CancellationToken.None);
+        Assert.True(dispatchResult.IsSuccess);
+
+        harness.CurrentUserContext.SetUser(
+            userId: 2,
+            username: "staff02",
+            fullName: "Staff 02",
+            roleCodes: ["WAREHOUSE_STAFF"]);
+
+        ConfirmDestinationReceiptResult receiptResult = await harness.Service.ConfirmDestinationReceiptAsync(
+            createResult.TransferOrderId!.Value,
+            actorUserId: 2,
+            CancellationToken.None);
+        Assert.True(receiptResult.IsSuccess);
+
+        ProductLot destinationLot = await harness.DbContext.ProductLots
+            .SingleAsync(lot => lot.WarehouseId == 2 && lot.ProductId == 1 && lot.LotCode == "R240220B");
+        Assert.Equal(5051, destinationLot.ProductLotId);
+        Assert.Equal(5m, destinationLot.RemainingQty);
+
+        StockBalance destinationBalance = await harness.DbContext.StockBalances
+            .SingleAsync(balance => balance.WarehouseId == 2 && balance.ProductLotId == 5051);
+        Assert.Equal(5m, destinationBalance.OnHandQty);
+    }
+
+    [Fact]
     public async Task CancelCreatedTransferAsync_ShouldReleaseReservedQty()
     {
         TestHarness harness = CreateHarness(userId: 1, roleCodes: ["WAREHOUSE_STAFF"]);

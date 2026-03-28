@@ -77,8 +77,12 @@
                     <StackPanel Grid.Row="1" Margin="0,0,0,8">
                         <WrapPanel Margin="0,0,0,4">
                             <StackPanel Width="420" Margin="0,0,10,0">
+                                <TextBlock Text="Search Product" />
+                                <TextBox Text="{Binding ProductSearchText, UpdateSourceTrigger=PropertyChanged}"
+                                         Height="30"
+                                         Margin="0,0,0,4" />
                                 <TextBlock Text="Product" />
-                                <ComboBox ItemsSource="{Binding Products}"
+                                <ComboBox ItemsSource="{Binding FilteredProductsView}"
                                           SelectedItem="{Binding SelectedProductToAdd}"
                                           DisplayMemberPath="Display"
                                           Height="30" />

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
+using System.Windows.Data;
 using SP26InventoryManagement.DTOs;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Services;
@@ -35,6 +36,7 @@ public class TransferManagementViewModel : ObservableObject
     private string _dispatchStatusMessage = string.Empty;
     private string _receiptStatusMessage = string.Empty;
     private string _addQtyInput = string.Empty;
+    private string _productSearchText = string.Empty;
     private string _remarks = string.Empty;
     private string _selectedProductAvailableQtyText = "Available Qty: -";
     private DateTime _requestDate = DateTime.Today;
@@ -51,6 +53,7 @@ public class TransferManagementViewModel : ObservableObject
     private TransferCreateLineItem? _selectedCreateLine;
     private TransferQueueItemDto? _selectedSourceDispatchTransfer;
     private TransferQueueItemDto? _selectedDestinationReceiptTransfer;
+    private readonly ICollectionView _filteredProductsView;
 
     public TransferManagementViewModel(
         ITransferService transferService,
@@ -66,6 +69,8 @@ public class TransferManagementViewModel : ObservableObject
         SourceWarehouses = [];
         DestinationWarehouses = [];
         Products = [];
+        _filteredProductsView = CollectionViewSource.GetDefaultView(Products);
+        _filteredProductsView.Filter = FilterProduct;
         CreateLines = [];
         PreviewLotAllocations = [];
         SourceDispatchQueue = [];
@@ -94,6 +99,8 @@ public class TransferManagementViewModel : ObservableObject
     public ObservableCollection<WarehouseLookupDto> DestinationWarehouses { get; }
 
     public ObservableCollection<ProductLookupDto> Products { get; }
+
+    public ICollectionView FilteredProductsView => _filteredProductsView;
 
     public ObservableCollection<TransferCreateLineItem> CreateLines { get; }
 
@@ -197,6 +204,19 @@ public class TransferManagementViewModel : ObservableObject
     {
         get => _addQtyInput;
         set => SetInputAndRefresh(ref _addQtyInput, value);
+    }
+
+    public string ProductSearchText
+    {
+        get => _productSearchText;
+        set
+        {
+            string normalized = value?.Trim() ?? string.Empty;
+            if (SetProperty(ref _productSearchText, normalized))
+            {
+                RefreshProductFilter();
+            }
+        }
     }
 
     public string Remarks
@@ -322,11 +342,17 @@ public class TransferManagementViewModel : ObservableObject
             IReadOnlyList<ProductLookupDto> products = await ExecuteTransferServiceCallAsync(
                 () => _transferService.GetActiveProductsAsync(ct));
 
+            int? selectedProductId = SelectedProductToAdd?.ProductId;
             ReplaceCollection(SourceWarehouses, sourceWarehouses);
             ReplaceCollection(Products, products);
+            RefreshProductFilter();
 
             SelectedSourceWarehouse ??= SourceWarehouses.FirstOrDefault();
-            SelectedProductToAdd = Products.FirstOrDefault();
+            SelectedProductToAdd = selectedProductId.HasValue
+                ? FilteredProductsView.Cast<ProductLookupDto>()
+                    .FirstOrDefault(product => product.ProductId == selectedProductId.Value)
+                : null;
+            SelectedProductToAdd ??= FilteredProductsView.Cast<ProductLookupDto>().FirstOrDefault();
 
             await RefreshDestinationWarehousesAsync();
             await RefreshSelectedProductAvailableQtyAsync();
@@ -399,6 +425,7 @@ public class TransferManagementViewModel : ObservableObject
         CreateLines.Clear();
         SelectedCreateLine = null;
         AddQtyInput = string.Empty;
+        ProductSearchText = string.Empty;
         Remarks = string.Empty;
         ClearPreview();
         RaiseCommandStates();
@@ -549,6 +576,7 @@ public class TransferManagementViewModel : ObservableObject
             CreateLines.Clear();
             SelectedCreateLine = null;
             AddQtyInput = string.Empty;
+            ProductSearchText = string.Empty;
             Remarks = string.Empty;
             ClearPreview();
 
@@ -1246,6 +1274,35 @@ public class TransferManagementViewModel : ObservableObject
     private static bool IsQtyEqual(decimal left, decimal right)
     {
         return Math.Abs(left - right) <= 0.0005m;
+    }
+
+    private void RefreshProductFilter()
+    {
+        _filteredProductsView.Refresh();
+
+        if (SelectedProductToAdd is not null && !ProductMatchesSearch(SelectedProductToAdd))
+        {
+            SelectedProductToAdd = null;
+            return;
+        }
+
+        _addLineCommand.RaiseCanExecuteChanged();
+    }
+
+    private bool FilterProduct(object item)
+    {
+        return item is ProductLookupDto product && ProductMatchesSearch(product);
+    }
+
+    private bool ProductMatchesSearch(ProductLookupDto product)
+    {
+        if (string.IsNullOrWhiteSpace(_productSearchText))
+        {
+            return true;
+        }
+
+        return product.Sku.Contains(_productSearchText, StringComparison.OrdinalIgnoreCase)
+            || product.ProductName.Contains(_productSearchText, StringComparison.OrdinalIgnoreCase);
     }
 
     private bool ValidateRequestAndRequiredDate(out string errorMessage)

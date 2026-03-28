@@ -126,11 +126,11 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode);
             if (!canOpenStaffWindow)
             {
                 MessageBox.Show(
-                    "Only WAREHOUSE_STAFF or ADMIN can open Receipt Staff screen.",
+                    "Only WAREHOUSE_STAFF can open Receipt Staff screen.",
                     "Access Denied",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -260,6 +260,36 @@ namespace SP26InventoryManagement
             }
 
             var window = app.Services.GetRequiredService<ExpiryAlertWindow>();
+            window.Owner = this;
+            window.Show();
+            window.Activate();
+        }
+
+        private void OpenGrossProfitReportButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            if (!_currentUserContext.IsAuthenticated)
+            {
+                NavigateToLogin();
+                return;
+            }
+
+            bool canOpenReport = _currentUserContext.IsInRole(ManagerRoleCode) || _currentUserContext.IsInRole(AdminRoleCode);
+            if (!canOpenReport)
+            {
+                MessageBox.Show(
+                    "Only MANAGER or ADMIN can open Gross Profit Report.",
+                    "Access Denied",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            if (Application.Current is not App app)
+            {
+                return;
+            }
+
+            var window = app.Services.GetRequiredService<GrossProfitReportWindow>();
             window.Owner = this;
             window.Show();
             window.Activate();

@@ -239,7 +239,7 @@ public class ReceiptManagementViewModel : ObservableObject
 
     public bool HasCreateReceiptPermission =>
         _currentUserContext.IsAuthenticated &&
-        (_currentUserContext.IsInRole(StaffRoleCode) || _currentUserContext.IsInRole(AdminRoleCode));
+        _currentUserContext.IsInRole(StaffRoleCode);
 
     public bool HasPostReceiptPermission =>
         _currentUserContext.IsAuthenticated &&

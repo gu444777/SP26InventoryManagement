@@ -142,9 +142,15 @@
                         <Button Content="View Expiry Alerts"
             Width="170"
             Height="38"
+            Margin="0,0,10,0"
             Visibility="{Binding CanViewExpiryAlerts, Converter={StaticResource BooleanToVisibilityConverter}}"
             Click="OpenExpiryAlertsButton_OnClick" />
 
+                        <Button Content="Gross Profit Report"
+            Width="170"
+            Height="38"
+            Visibility="{Binding CanViewGrossProfitReport, Converter={StaticResource BooleanToVisibilityConverter}}"
+            Click="OpenGrossProfitReportButton_OnClick" />
                         <Button Content="Manage Warehouses"
                                 Width="160"
                                 Height="38"

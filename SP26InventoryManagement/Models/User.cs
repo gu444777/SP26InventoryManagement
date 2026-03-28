@@ -19,6 +19,8 @@ public partial class User
 
     public bool IsActive { get; set; }
 
+    public int AuthVersion { get; set; }
+
     public DateTime? LastLoginAt { get; set; }
 
     public DateTime CreatedAt { get; set; }

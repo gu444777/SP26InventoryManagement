@@ -1,12 +1,10 @@
-﻿using SP26InventoryManagement.Infrastructure;
-using SP26InventoryManagement.ViewModels;
-using SP26InventoryManagement.Views;
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.ViewModels;
+using SP26InventoryManagement.Views;
 
 namespace SP26InventoryManagement
 {
@@ -24,26 +22,32 @@ namespace SP26InventoryManagement
         {
             InitializeComponent();
             ViewModel = viewModel;
-            _currentUserContext = currentUserContext;
-            DataContext = viewModel;
+            _currentUserContext =  currentUserContext;
+            DataContext =  viewModel;
+
             ViewModel.LogoutRequested += OnLogoutRequested;
-            _sessionMonitorTimer = new DispatcherTimer
+
+            _sessionMonitorTimer =  new DispatcherTimer
             {
-                Interval = TimeSpan.FromSeconds(15)
-            };
+                Interval =  TimeSpan.FromSeconds(15)
+            }
+            ;
             _sessionMonitorTimer.Tick += OnSessionMonitorTick;
+
             Loaded += OnLoaded;
             Closed += OnClosed;
         }
 
         public MainWindowViewModel ViewModel { get; }
 
-        private void OnLoaded(object sender, RoutedEventArgs e)
+        private void OnLoaded(object sender,  RoutedEventArgs e)
         {
             _sessionMonitorTimer.Start();
         }
 
-        private void OpenIssueStaffButton_OnClick(object sender, RoutedEventArgs e)
+        // --- CÁC SỰ KIỆN MỞ MODULE ---
+
+        private void OpenAdjustmentButton_OnClick(object sender,  RoutedEventArgs e)
         {
             if (!_currentUserContext.IsAuthenticated)
             {
@@ -51,104 +55,81 @@ namespace SP26InventoryManagement
                 return;
             }
 
-            bool canOpenStaffWindow = _currentUserContext.IsInRole(StaffRoleCode);
-            if (!canOpenStaffWindow)
+            // Kiểm tra quyền: STAFF hoặc MANAGER mới được điều chỉnh kho
+            bool canAccess = _currentUserContext.IsInRole(StaffRoleCode) ||  _currentUserContext.IsInRole(ManagerRoleCode);
+            if(!canAccess)
             {
-                MessageBox.Show(
-                    "Only WAREHOUSE_STAFF can open Issue Staff screen.",
-                    "Access Denied",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                MessageBox.Show("Only STAFF or MANAGER can perform stock adjustments.",  "Access Denied",  MessageBoxButton.OK,  MessageBoxImage.Warning);
                 return;
             }
 
-            if (Application.Current is not App app)
+            if(Application.Current is not App app) return;
+
+            var window = app.Services.GetRequiredService<AdjustmentView>();
+            window.Owner =  this;
+            window.ShowDialog(); // Dùng ShowDialog để chờ xử lý xong phiếu
+        }
+
+        private void OpenIssueStaffButton_OnClick(object sender,  RoutedEventArgs e)
+        {
+            if(!_currentUserContext.IsAuthenticated) { NavigateToLogin(); return;  }
+
+            if(!_currentUserContext.IsInRole(StaffRoleCode))
             {
+                MessageBox.Show("Only WAREHOUSE_STAFF can open Issue Staff screen.",  "Access Denied",  MessageBoxButton.OK,  MessageBoxImage.Warning);
                 return;
             }
 
+            if(Application.Current is not App app) return;
             var window = app.Services.GetRequiredService<IssueStaffWindow>();
-            window.Owner = this;
+            window.Owner =  this;
             window.Show();
-            window.Activate();
         }
 
-        private void OpenManageUserButton_OnClick(object sender, RoutedEventArgs e)
+        private void OpenManageUserButton_OnClick(object sender,  RoutedEventArgs e)
         {
-            if (!_currentUserContext.IsAuthenticated)
+            if(!_currentUserContext.IsAuthenticated) { NavigateToLogin(); return;  }
+
+            if(!_currentUserContext.IsInRole(AdminRoleCode))
             {
-                NavigateToLogin();
+                MessageBox.Show("Only ADMIN can open User Management screen.",  "Access Denied",  MessageBoxButton.OK,  MessageBoxImage.Warning);
                 return;
             }
 
-            bool canOpenAdminWindow = _currentUserContext.IsInRole(AdminRoleCode);
-            if (!canOpenAdminWindow)
-            {
-                MessageBox.Show(
-                    "Only ADMIN can open User Management screen.",
-                    "Access Denied",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
-            if (Application.Current is not App app)
-            {
-                return;
-            }
-
+            if(Application.Current is not App app) return;
             var window = app.Services.GetRequiredService<AdminUserManagementWindow>();
-            window.Owner = this;
+            window.Owner =  this;
             window.Show();
-            window.Activate();
         }
 
-        private void OpenIssueManagerButton_OnClick(object sender, RoutedEventArgs e)
+        private void OpenIssueManagerButton_OnClick(object sender,  RoutedEventArgs e)
         {
-            if (!_currentUserContext.IsAuthenticated)
+            if(!_currentUserContext.IsAuthenticated) { NavigateToLogin(); return;  }
+
+            if(!_currentUserContext.IsInRole(ManagerRoleCode))
             {
-                NavigateToLogin();
+                MessageBox.Show("Only MANAGER can open Issue Manager screen.",  "Access Denied",  MessageBoxButton.OK,  MessageBoxImage.Warning);
                 return;
             }
 
-            bool canOpenManagerWindow = _currentUserContext.IsInRole(ManagerRoleCode);
-            if (!canOpenManagerWindow)
-            {
-                MessageBox.Show(
-                    "Only MANAGER can open Issue Manager screen.",
-                    "Access Denied",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                return;
-            }
-
-            if (Application.Current is not App app)
-            {
-                return;
-            }
-
+            if(Application.Current is not App app) return;
             var window = app.Services.GetRequiredService<IssueManagerWindow>();
-            window.Owner = this;
+            window.Owner =  this;
             window.Show();
-            window.Activate();
         }
 
-        private void OnClosed(object? sender, EventArgs e)
+        // --- QUẢN LÝ SESSION & LOGOUT ---
+
+        private void OnClosed(object ?  sender,  EventArgs e)
         {
             _sessionMonitorTimer.Stop();
             _sessionMonitorTimer.Tick -= OnSessionMonitorTick;
-            Loaded -= OnLoaded;
-            Closed -= OnClosed;
             ViewModel.LogoutRequested -= OnLogoutRequested;
         }
 
-        private void OnSessionMonitorTick(object? sender, EventArgs e)
+        private void OnSessionMonitorTick(object ?  sender,  EventArgs e)
         {
-            if (_isNavigatingToLogin || _currentUserContext.IsAuthenticated)
-            {
-                return;
-            }
-
+            if(_isNavigatingToLogin ||  _currentUserContext.IsAuthenticated) return;
             NavigateToLogin();
         }
 
@@ -159,19 +140,14 @@ namespace SP26InventoryManagement
 
         private void NavigateToLogin()
         {
-            if (_isNavigatingToLogin)
-            {
-                return;
-            }
+            if(_isNavigatingToLogin) return;
 
-            if (Application.Current is App app)
+            if(Application.Current is App app)
             {
-                _isNavigatingToLogin = true;
+                _isNavigatingToLogin =  true;
                 _sessionMonitorTimer.Stop();
                 app.NavigateToLoginAfterLogout(this);
             }
         }
-
-       
     }
 }

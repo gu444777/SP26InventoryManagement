@@ -17,7 +17,7 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,0,0,16">
-           
+
             <Button Content="Change Password"
                     Command="{Binding OpenChangePasswordCommand}"
                     MinWidth="150"
@@ -69,21 +69,46 @@
                                FontWeight="SemiBold"
                                Margin="0,0,0,10" />
                     <WrapPanel>
+
                         <Button Content="Manage User"
                                 Width="150"
                                 Height="38"
-                                Margin="0,0,10,0"
+                                Margin="0,0,10,10"
                                 Visibility="{Binding CanManageUsers, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenManageUserButton_OnClick" />
+
+                        <Button Content="Manage Warehouses"
+                                Width="160"
+                                Height="38"
+                                Margin="0,0,10,10"
+                                Command="{Binding OpenWarehouseCommand}"
+                                Visibility="{Binding CanManageWarehouses, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Manage Categories"
+        Width="160"
+        Height="38"
+        Margin="0,0,10,10"
+        Command="{Binding OpenManageCategoriesCommand}"
+        Visibility="{Binding CanManageProducts, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Manage Products"
+        Width="160"
+        Height="38"
+        Margin="0,0,10,10"
+        Command="{Binding OpenManageProductsCommand}"
+        Visibility="{Binding CanManageProducts, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Stock Adjustment" 
+        Width="160" Height="38" Margin="0,0,10,10"
+        Command="{Binding OpenAdjustmentCommand}" />
                         <Button Content="Open Issue (Staff)"
                                 Width="170"
                                 Height="38"
-                                Margin="0,0,10,0"
+                                Margin="0,0,10,10"
                                 Visibility="{Binding CanOpenIssueStaff, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenIssueStaffButton_OnClick" />
+
                         <Button Content="Open Issue (Manager)"
                                 Width="190"
                                 Height="38"
+                                Margin="0,0,10,10"
                                 Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
                                 Click="OpenIssueManagerButton_OnClick" />
                     </WrapPanel>

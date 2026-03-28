@@ -1,0 +1,80 @@
+﻿<Window x:Class="SP26InventoryManagement.Views.ProductView"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="Product Management" Height="550" Width="850"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" BorderBrush="#DDDDDD" BorderThickness="1" CornerRadius="8" Padding="15" Margin="0,0,0,15">
+            <StackPanel>
+                <TextBlock Text="Product Information" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,15"/>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                        <TextBlock Text="Product Name:" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding SelectedProduct.ProductName, UpdateSourceTrigger=PropertyChanged}" 
+                                 TextChanged="InputControl_Changed"
+                                 Height="30" VerticalContentAlignment="Center"/>
+
+                        <TextBlock Text="SKU Code (optional):" Margin="0,10,0,5"/>
+                        <TextBox Text="{Binding SelectedProduct.Sku, UpdateSourceTrigger=PropertyChanged}" 
+                                 TextChanged="InputControl_Changed"
+                                 Height="30" VerticalContentAlignment="Center"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <TextBlock Text="Category:" Margin="0,0,0,5"/>
+                        <ComboBox ItemsSource="{Binding Categories}" 
+                                  SelectedValue="{Binding SelectedProduct.CategoryId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  SelectionChanged="InputControl_Changed"
+                                  DisplayMemberPath="CategoryName" 
+                                  SelectedValuePath="CategoryId"
+                                  Height="30" VerticalContentAlignment="Center"/>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,25,0,0">
+                            <Button Content="Refresh" Command="{Binding RefreshCommand}" 
+                                    Width="80" Height="32" Margin="0,0,8,0"/>
+
+                            <Button Content="Delete" Command="{Binding DeleteCommand}" 
+                                    Width="80" Height="32" Margin="0,0,8,0" Background="#FFE1E1"/>
+
+                            <Button Content="Save" Command="{Binding SaveCommand}" 
+                                    Width="100" Height="32" FontWeight="Bold" Background="#E1F5FE" IsDefault="True"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <DataGrid Grid.Row="1" 
+                  ItemsSource="{Binding Products}" 
+                  SelectedItem="{Binding SelectedProduct, Mode=TwoWay}"
+                  AutoGenerateColumns="False" 
+                  IsReadOnly="True" 
+                  CanUserAddRows="False"
+                  SelectionMode="Single"
+                  BorderBrush="#DDDDDD"
+                  GridLinesVisibility="Horizontal"
+                  HorizontalGridLinesBrush="#F0F0F0">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="ID" Binding="{Binding ProductId}" Width="50"/>
+                <DataGridTextColumn Header="SKU" Binding="{Binding Sku}" Width="120"/>
+                <DataGridTextColumn Header="Product Name" Binding="{Binding ProductName}" Width="*"/>
+                <DataGridTextColumn Header="Category" Binding="{Binding Category.CategoryName}" Width="150"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Window>

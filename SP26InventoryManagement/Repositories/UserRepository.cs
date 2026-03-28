@@ -98,6 +98,7 @@ public class UserRepository : IUserRepository
                 PhoneNumber = user.PhoneNumber,
                 IsActive = user.IsActive,
                 LastLoginAt = user.LastLoginAt,
+                RowVersion = user.RowVersion.ToArray(),
                 Roles = user.UserRoleUsers
                     .Where(userRole => userRole.Role.IsActive)
                     .OrderBy(userRole => userRole.Role.RoleCode)

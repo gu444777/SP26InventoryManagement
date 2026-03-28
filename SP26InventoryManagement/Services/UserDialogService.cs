@@ -21,6 +21,15 @@ public class UserDialogService : IUserDialogService
         return dialogResult == true;
     }
 
+    public Task ShowStaffWarehouseAssignmentDialogAsync(CancellationToken ct)
+    {
+        _ = ct;
+        var window = _serviceProvider.GetRequiredService<SP26InventoryManagement.StaffWarehouseAssignmentWindow>();
+        window.Owner = GetCurrentOwner();
+        window.ShowDialog();
+        return Task.CompletedTask;
+    }
+
     public Task ShowChangePasswordDialogAsync(int userId, string username, CancellationToken ct)
     {
         var window = _serviceProvider.GetRequiredService<SP26InventoryManagement.ChangePasswordWindow>();

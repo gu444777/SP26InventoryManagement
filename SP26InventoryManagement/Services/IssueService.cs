@@ -34,13 +34,30 @@ public class IssueService : IIssueService
         _auditLogService = auditLogService;
     }
 
-    public async Task<IReadOnlyList<WarehouseLookupDto>> GetActiveWarehousesAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<WarehouseLookupDto>> GetActiveWarehousesAsync(int actorUserId, CancellationToken ct)
     {
-        await EnsureCurrentSessionOrThrowAsync(ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
 
-        return await _dbContext.Warehouses
+        IQueryable<Warehouse> query = _dbContext.Warehouses
             .AsNoTracking()
-            .Where(warehouse => warehouse.IsActive)
+            .Where(warehouse => warehouse.IsActive);
+
+        if (!authorization.IsAdmin && !authorization.IsManager)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                throw new UnauthorizedAccessException("Your account has no warehouse assignment.");
+            }
+
+            int warehouseId = authorization.AssignedWarehouseId.Value;
+            query = query.Where(warehouse => warehouse.WarehouseId == warehouseId);
+        }
+
+        return await query
             .OrderBy(warehouse => warehouse.WarehouseCode)
             .Select(warehouse => new WarehouseLookupDto
             {
@@ -86,9 +103,31 @@ public class IssueService : IIssueService
             .ToListAsync(ct);
     }
 
-    public async Task<decimal> GetAvailableQtyAsync(int warehouseId, int productId, DateTime transactionDate, CancellationToken ct)
+    public async Task<decimal> GetAvailableQtyAsync(
+        int warehouseId,
+        int productId,
+        DateTime transactionDate,
+        int actorUserId,
+        CancellationToken ct)
     {
-        await EnsureCurrentSessionOrThrowAsync(ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        if (!authorization.IsAdmin && !authorization.IsManager)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                throw new UnauthorizedAccessException("Your account has no warehouse assignment.");
+            }
+
+            if (authorization.AssignedWarehouseId.Value != warehouseId)
+            {
+                throw new UnauthorizedAccessException("Access denied. Warehouse must match your assignment.");
+            }
+        }
 
         if (warehouseId <= 0 || productId <= 0)
         {
@@ -118,10 +157,28 @@ public class IssueService : IIssueService
 
     public async Task<PreviewIssueAllocationResult> PreviewLotAllocationAsync(IssueRequestDto request, int actorUserId, CancellationToken ct)
     {
-        OperationResult authorization = await EnsureRoleAsync(actorUserId, StaffRoleCode, ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
         if (!authorization.IsSuccess)
         {
             return PreviewIssueAllocationResult.Failure(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        if (!authorization.IsAdmin && !authorization.IsStaff)
+        {
+            return PreviewIssueAllocationResult.Failure($"Access denied. Role '{StaffRoleCode}' is required.");
+        }
+
+        if (!authorization.IsAdmin)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                return PreviewIssueAllocationResult.Failure("Your account has no warehouse assignment.");
+            }
+
+            if (request.WarehouseId != authorization.AssignedWarehouseId.Value)
+            {
+                return PreviewIssueAllocationResult.Failure("Access denied. Warehouse must match your assignment.");
+            }
         }
 
         AllocationComputation computation = await ComputeAllocationAsync(request, ct);
@@ -141,10 +198,28 @@ public class IssueService : IIssueService
 
     public async Task<CreateIssueResult> CreateIssueAsync(IssueRequestDto request, int actorUserId, CancellationToken ct)
     {
-        OperationResult authorization = await EnsureRoleAsync(actorUserId, StaffRoleCode, ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
         if (!authorization.IsSuccess)
         {
             return CreateIssueResult.Failure(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        if (!authorization.IsAdmin && !authorization.IsStaff)
+        {
+            return CreateIssueResult.Failure($"Access denied. Role '{StaffRoleCode}' is required.");
+        }
+
+        if (!authorization.IsAdmin)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                return CreateIssueResult.Failure("Your account has no warehouse assignment.");
+            }
+
+            if (request.WarehouseId != authorization.AssignedWarehouseId.Value)
+            {
+                return CreateIssueResult.Failure("Access denied. Warehouse must match your assignment.");
+            }
         }
 
         _dbContext.ChangeTracker.Clear();
@@ -263,15 +338,31 @@ public class IssueService : IIssueService
         }
     }
 
-    public async Task<IReadOnlyList<DraftIssueHeaderDto>> GetDraftIssuesAsync(CancellationToken ct)
+    public async Task<IReadOnlyList<DraftIssueHeaderDto>> GetDraftIssuesAsync(int actorUserId, CancellationToken ct)
     {
-        await EnsureCurrentSessionOrThrowAsync(ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
 
-        return await _dbContext.StockTransactions
+        IQueryable<StockTransaction> query = _dbContext.StockTransactions
             .AsNoTracking()
             .Where(transaction =>
                 transaction.TransactionType == IssueTransactionType &&
-                transaction.DocumentStatus == DocumentStatusDraft)
+                transaction.DocumentStatus == DocumentStatusDraft);
+
+        if (!authorization.IsAdmin && !authorization.IsManager)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                throw new UnauthorizedAccessException("Your account has no warehouse assignment.");
+            }
+
+            query = query.Where(transaction => transaction.CreatedByUserId == actorUserId);
+        }
+
+        return await query
             .OrderByDescending(transaction => transaction.TransactionDate)
             .ThenByDescending(transaction => transaction.CreatedAt)
             .Select(transaction => new DraftIssueHeaderDto
@@ -289,9 +380,44 @@ public class IssueService : IIssueService
             .ToListAsync(ct);
     }
 
-    public async Task<IReadOnlyList<DraftIssueLineDto>> GetDraftIssueLinesAsync(long transactionId, CancellationToken ct)
+    public async Task<IReadOnlyList<DraftIssueLineDto>> GetDraftIssueLinesAsync(long transactionId, int actorUserId, CancellationToken ct)
     {
-        await EnsureCurrentSessionOrThrowAsync(ct);
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
+        {
+            throw new UnauthorizedAccessException(authorization.ErrorMessage ?? "Access denied.");
+        }
+
+        DraftIssueAccessHeaderDto? header = await _dbContext.StockTransactions
+            .AsNoTracking()
+            .Where(transaction =>
+                transaction.TransactionId == transactionId &&
+                transaction.TransactionType == IssueTransactionType &&
+                transaction.DocumentStatus == DocumentStatusDraft)
+            .Select(transaction => new DraftIssueAccessHeaderDto
+            {
+                TransactionId = transaction.TransactionId,
+                CreatedByUserId = transaction.CreatedByUserId
+            })
+            .SingleOrDefaultAsync(ct);
+
+        if (header is null)
+        {
+            return [];
+        }
+
+        if (!authorization.IsAdmin && !authorization.IsManager)
+        {
+            if (!authorization.AssignedWarehouseId.HasValue)
+            {
+                throw new UnauthorizedAccessException("Your account has no warehouse assignment.");
+            }
+
+            if (header.CreatedByUserId != actorUserId)
+            {
+                throw new UnauthorizedAccessException("Access denied.");
+            }
+        }
 
         return await _dbContext.StockTransactionLines
             .AsNoTracking()
@@ -965,18 +1091,57 @@ public class IssueService : IIssueService
 
     private async Task<OperationResult> EnsureRoleAsync(int actorUserId, string requiredRoleCode, CancellationToken ct)
     {
-        OperationResult sessionValidation = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, null, ct);
-        if (!sessionValidation.IsSuccess)
+        IssueAuthorizationContext authorization = await EnsureIssueAccessAsync(actorUserId, ct);
+        if (!authorization.IsSuccess)
         {
-            return sessionValidation;
+            return OperationResult.Failure(authorization.ErrorMessage ?? "Access denied.");
         }
 
-        if (_currentUserContext.IsInRole(requiredRoleCode) || _currentUserContext.IsInRole(AdminRoleCode))
+        if (authorization.IsAdmin)
         {
             return OperationResult.Success();
         }
 
-        return OperationResult.Failure($"Access denied. Role '{requiredRoleCode}' is required.");
+        bool hasRole = requiredRoleCode switch
+        {
+            StaffRoleCode => authorization.IsStaff,
+            ManagerRoleCode => authorization.IsManager,
+            _ => _currentUserContext.IsInRole(requiredRoleCode)
+        };
+
+        return hasRole
+            ? OperationResult.Success()
+            : OperationResult.Failure($"Access denied. Role '{requiredRoleCode}' is required.");
+    }
+
+    private async Task<IssueAuthorizationContext> EnsureIssueAccessAsync(int actorUserId, CancellationToken ct)
+    {
+        OperationResult sessionValidation = await _sessionValidationService.EnsureSessionForUserAsync(actorUserId, null, ct);
+        if (!sessionValidation.IsSuccess)
+        {
+            return IssueAuthorizationContext.Failure(sessionValidation.ErrorMessage ?? "Session expired.");
+        }
+
+        bool isAdmin = _currentUserContext.IsInRole(AdminRoleCode);
+        bool isManager = _currentUserContext.IsInRole(ManagerRoleCode);
+        bool isStaff = _currentUserContext.IsInRole(StaffRoleCode);
+
+        if (!isAdmin && !isManager && !isStaff)
+        {
+            return IssueAuthorizationContext.Failure("Access denied.");
+        }
+
+        int? assignedWarehouseId = null;
+        if (isStaff && !isAdmin)
+        {
+            assignedWarehouseId = await _dbContext.UserWarehouseAssignments
+                .AsNoTracking()
+                .Where(assignment => assignment.UserId == actorUserId)
+                .Select(assignment => (int?)assignment.WarehouseId)
+                .SingleOrDefaultAsync(ct);
+        }
+
+        return IssueAuthorizationContext.Success(isAdmin, isManager, isStaff, assignedWarehouseId);
     }
 
     private async Task EnsureCurrentSessionOrThrowAsync(CancellationToken ct)
@@ -1050,6 +1215,53 @@ public class IssueService : IIssueService
     private static decimal RoundMoney(decimal value)
     {
         return decimal.Round(value, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private sealed class DraftIssueAccessHeaderDto
+    {
+        public long TransactionId { get; init; }
+
+        public int CreatedByUserId { get; init; }
+    }
+
+    private sealed class IssueAuthorizationContext
+    {
+        public bool IsSuccess { get; private init; }
+
+        public string? ErrorMessage { get; private init; }
+
+        public bool IsAdmin { get; private init; }
+
+        public bool IsManager { get; private init; }
+
+        public bool IsStaff { get; private init; }
+
+        public int? AssignedWarehouseId { get; private init; }
+
+        public static IssueAuthorizationContext Success(
+            bool isAdmin,
+            bool isManager,
+            bool isStaff,
+            int? assignedWarehouseId)
+        {
+            return new IssueAuthorizationContext
+            {
+                IsSuccess = true,
+                IsAdmin = isAdmin,
+                IsManager = isManager,
+                IsStaff = isStaff,
+                AssignedWarehouseId = assignedWarehouseId
+            };
+        }
+
+        public static IssueAuthorizationContext Failure(string errorMessage)
+        {
+            return new IssueAuthorizationContext
+            {
+                IsSuccess = false,
+                ErrorMessage = errorMessage
+            };
+        }
     }
 
     private sealed class AvailableLotSnapshot

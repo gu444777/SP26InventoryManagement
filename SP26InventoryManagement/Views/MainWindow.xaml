@@ -17,7 +17,7 @@
                     Orientation="Horizontal"
                     HorizontalAlignment="Right"
                     Margin="0,0,0,16">
-           
+
             <Button Content="Change Password"
                     Command="{Binding OpenChangePasswordCommand}"
                     MinWidth="150"
@@ -105,6 +105,11 @@
             Margin="0,0,10,0"
             Visibility="{Binding CanOpenIssueManager, Converter={StaticResource BooleanToVisibilityConverter}}"
             Click="OpenIssueManagerButton_OnClick" />
+            <Button Content="Open Transfer"
+                                Width="150"
+                                Height="38"
+                                Visibility="{Binding CanOpenTransfer, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                Click="OpenTransferButton_OnClick" />
 
                         <Button Content="Open Receipt (Staff)"
             Width="180"
@@ -146,6 +151,29 @@
             Height="38"
             Visibility="{Binding CanViewGrossProfitReport, Converter={StaticResource BooleanToVisibilityConverter}}"
             Click="OpenGrossProfitReportButton_OnClick" />
+                        <Button Content="Manage Warehouses"
+                                Width="160"
+                                Height="38"
+                                Margin="0,0,10,10"
+                                Command="{Binding OpenWarehouseCommand}"
+                                Visibility="{Binding CanManageWarehouses, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Manage Categories"
+        Width="160"
+        Height="38"
+        Margin="0,0,10,10"
+        Command="{Binding OpenManageCategoriesCommand}"
+        Visibility="{Binding CanManageProducts, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Manage Products"
+        Width="160"
+        Height="38"
+        Margin="0,0,10,10"
+        Command="{Binding OpenManageProductsCommand}"
+        Visibility="{Binding CanManageProducts, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <Button Content="Stock Adjustment" 
+        Width="160" Height="38" Margin="0,0,10,10"
+        Command="{Binding OpenAdjustmentCommand}" />
+
+
 
                     </WrapPanel>
                 </StackPanel>

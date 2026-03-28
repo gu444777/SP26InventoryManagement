@@ -11,6 +11,7 @@ namespace SP26InventoryManagement.ViewModels;
 public class CreateUserViewModel : ObservableObject
 {
     private const string AdminRoleCode = "ADMIN";
+    private const string StaffRoleCode = "WAREHOUSE_STAFF";
 
     private readonly IUserManagementService _userManagementService;
     private readonly IRoleRepository _roleRepository;
@@ -25,6 +26,8 @@ public class CreateUserViewModel : ObservableObject
     private string _phoneNumber = string.Empty;
     private string _errorMessage = string.Empty;
     private bool _isBusy;
+    private bool _isStaffRoleSelected;
+    private WarehouseLookupDto? _selectedWarehouse;
 
     public CreateUserViewModel(
         IUserManagementService userManagementService,
@@ -38,6 +41,7 @@ public class CreateUserViewModel : ObservableObject
         _messageService = messageService;
 
         RoleSelections = [];
+        Warehouses = [];
         _createUserCommand = new AsyncRelayCommand(CreateUserAsync, CanCreateUser);
         _cancelCommand = new RelayCommand(() => CloseRequested?.Invoke(false));
     }
@@ -45,6 +49,8 @@ public class CreateUserViewModel : ObservableObject
     public event Action<bool>? CloseRequested;
 
     public ObservableCollection<RoleSelectionItem> RoleSelections { get; }
+
+    public ObservableCollection<WarehouseLookupDto> Warehouses { get; }
 
     public string Username
     {
@@ -104,12 +110,46 @@ public class CreateUserViewModel : ObservableObject
 
     public ICommand CancelCommand => _cancelCommand;
 
+    public WarehouseLookupDto? SelectedWarehouse
+    {
+        get => _selectedWarehouse;
+        set
+        {
+            if (SetProperty(ref _selectedWarehouse, value))
+            {
+                _createUserCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public bool IsStaffRoleSelected
+    {
+        get => _isStaffRoleSelected;
+        private set
+        {
+            if (SetProperty(ref _isStaffRoleSelected, value))
+            {
+                _createUserCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
     public async Task InitializeAsync(CancellationToken ct)
     {
         ErrorMessage = string.Empty;
         RoleSelections.Clear();
+        Warehouses.Clear();
+
+        if (!_currentUserContext.IsAuthenticated || !_currentUserContext.UserId.HasValue)
+        {
+            throw new UnauthorizedAccessException("Session expired. Please log in again.");
+        }
 
         IReadOnlyList<RoleOptionDto> roles = await _roleRepository.GetActiveRolesAsync(ct);
+        IReadOnlyList<WarehouseLookupDto> warehouses = await _userManagementService.GetActiveWarehousesAsync(
+            _currentUserContext.UserId.Value,
+            ct);
+
         foreach (RoleOptionDto role in roles)
         {
             RoleSelectionItem roleSelection = new()
@@ -122,6 +162,14 @@ public class CreateUserViewModel : ObservableObject
             roleSelection.PropertyChanged += OnRoleSelectionChanged;
             RoleSelections.Add(roleSelection);
         }
+
+        foreach (WarehouseLookupDto warehouse in warehouses)
+        {
+            Warehouses.Add(warehouse);
+        }
+
+        SelectedWarehouse = Warehouses.FirstOrDefault();
+        UpdateStaffRoleSelectionState();
     }
 
     private bool CanCreateUser()
@@ -130,7 +178,8 @@ public class CreateUserViewModel : ObservableObject
             && !IsBusy
             && !string.IsNullOrWhiteSpace(Username)
             && !string.IsNullOrWhiteSpace(FullName)
-            && RoleSelections.Any(role => role.IsSelected);
+            && RoleSelections.Any(role => role.IsSelected)
+            && (!IsStaffRoleSelected || SelectedWarehouse is not null);
     }
 
     private async Task CreateUserAsync()
@@ -146,13 +195,20 @@ public class CreateUserViewModel : ObservableObject
 
         try
         {
+            if (IsStaffRoleSelected && SelectedWarehouse is null)
+            {
+                ErrorMessage = "Warehouse is required for WAREHOUSE_STAFF.";
+                return;
+            }
+
             CreateUserRequest request = new()
             {
                 Username = Username.Trim(),
                 FullName = FullName.Trim(),
                 Email = string.IsNullOrWhiteSpace(Email) ? null : Email.Trim(),
                 PhoneNumber = string.IsNullOrWhiteSpace(PhoneNumber) ? null : PhoneNumber.Trim(),
-                RoleIds = RoleSelections.Where(role => role.IsSelected).Select(role => role.RoleId).ToArray()
+                RoleIds = RoleSelections.Where(role => role.IsSelected).Select(role => role.RoleId).ToArray(),
+                WarehouseId = IsStaffRoleSelected ? SelectedWarehouse?.WarehouseId : null
             };
 
             CreateUserResult result = await _userManagementService.CreateUserAsync(
@@ -183,8 +239,16 @@ public class CreateUserViewModel : ObservableObject
     {
         if (e.PropertyName == nameof(RoleSelectionItem.IsSelected))
         {
+            UpdateStaffRoleSelectionState();
             _createUserCommand.RaiseCanExecuteChanged();
         }
+    }
+
+    private void UpdateStaffRoleSelectionState()
+    {
+        IsStaffRoleSelected = RoleSelections.Any(role =>
+            role.IsSelected &&
+            string.Equals(role.RoleCode, StaffRoleCode, StringComparison.OrdinalIgnoreCase));
     }
 
     private bool HasAdminSession()

@@ -23,7 +23,7 @@ namespace SP26InventoryManagement
             Services = ConfigureServices();
 
             // 🔥 TEST MODE (đơn giản nhất)
-           // var window = Services.GetRequiredService<SupplierView>();
+            // var window = Services.GetRequiredService<SupplierView>();
             //MainWindow = window;
             //ShutdownMode = ShutdownMode.OnMainWindowClose;
             //window.Show();
@@ -94,6 +94,7 @@ namespace SP26InventoryManagement
             services.AddTransient<ISessionValidationService, SessionValidationService>();
             services.AddTransient<IAuditLogService, AuditLogService>();
             services.AddTransient<IIssueService, IssueService>();
+            services.AddTransient<ITransferService, TransferService>();
             services.AddTransient<IReceiptService, ReceiptService>();
             services.AddTransient<IStockSnapshotService, StockSnapshotService>();
             services.AddTransient<IStockLedgerService, StockLedgerService>();
@@ -105,6 +106,7 @@ namespace SP26InventoryManagement
 
             services.AddTransient<LoginViewModel>();
             services.AddTransient<IssueManagementViewModel>();
+            services.AddTransient<TransferManagementViewModel>();
             services.AddTransient<ReceiptManagementViewModel>();
             services.AddTransient<StockSnapshotViewModel>();
             services.AddTransient<StockLedgerViewModel>();
@@ -112,6 +114,7 @@ namespace SP26InventoryManagement
             services.AddTransient<GrossProfitReportViewModel>();
             services.AddTransient<MainWindowViewModel>();
             services.AddTransient<AdminUserManagementViewModel>();
+            services.AddTransient<StaffWarehouseAssignmentViewModel>();
             services.AddTransient<CreateUserViewModel>();
             services.AddTransient<ChangePasswordViewModel>();
 
@@ -119,6 +122,7 @@ namespace SP26InventoryManagement
             services.AddTransient<MainWindow>();
             services.AddTransient<IssueStaffWindow>();
             services.AddTransient<IssueManagerWindow>();
+            services.AddTransient<TransferWindow>();
             services.AddTransient<ReceiptStaffWindow>();
             services.AddTransient<ReceiptManagerWindow>();
             services.AddTransient<StockSnapshotWindow>();
@@ -126,11 +130,12 @@ namespace SP26InventoryManagement
             services.AddTransient<ExpiryAlertWindow>();
             services.AddTransient<GrossProfitReportWindow>();
             services.AddTransient<AdminUserManagementWindow>();
+            services.AddTransient<StaffWarehouseAssignmentWindow>();
             services.AddTransient<CreateUserWindow>();
             services.AddTransient<ChangePasswordWindow>();
             services.AddTransient<ISupplierService, SupplierService>();
             services.AddTransient<ICustomerService, CustomerService>();
-          
+
             services.AddTransient<SupplierViewModel>();
             services.AddTransient<CustomerViewModel>();
 

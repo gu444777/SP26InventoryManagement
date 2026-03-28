@@ -11,6 +11,7 @@ namespace SP26InventoryManagement.ViewModels;
 public class AdminUserManagementViewModel : ObservableObject
 {
     private const string AdminRoleCode = "ADMIN";
+    private const string ConcurrencyConflictPrefix = "Concurrency conflict";
 
     private readonly IAuthService _authService;
     private readonly IUserManagementService _userManagementService;
@@ -23,6 +24,7 @@ public class AdminUserManagementViewModel : ObservableObject
     private readonly AsyncRelayCommand _nextPageCommand;
     private readonly AsyncRelayCommand _previousPageCommand;
     private readonly AsyncRelayCommand _openCreateUserCommand;
+    private readonly AsyncRelayCommand _openStaffWarehouseAssignmentCommand;
     private readonly AsyncRelayCommand _saveRolesCommand;
     private readonly AsyncRelayCommand _resetPasswordCommand;
     private readonly AsyncRelayCommand _deactivateUserCommand;
@@ -70,6 +72,7 @@ public class AdminUserManagementViewModel : ObservableObject
         _nextPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage + 1), CanMoveToNextPage);
         _previousPageCommand = new AsyncRelayCommand(() => LoadUsersAsync(CurrentPage - 1), CanMoveToPreviousPage);
         _openCreateUserCommand = new AsyncRelayCommand(OpenCreateUserAsync, () => !IsBusy && HasAdminSession());
+        _openStaffWarehouseAssignmentCommand = new AsyncRelayCommand(OpenStaffWarehouseAssignmentAsync, () => !IsBusy && HasAdminSession());
         _saveRolesCommand = new AsyncRelayCommand(SaveRolesAsync, CanSaveRoles);
         _resetPasswordCommand = new AsyncRelayCommand(ResetPasswordAsync, CanOperateOnSelectedUser);
         _deactivateUserCommand = new AsyncRelayCommand(DeactivateUserAsync, CanDeactivateSelectedUser);
@@ -177,6 +180,8 @@ public class AdminUserManagementViewModel : ObservableObject
     public ICommand PreviousPageCommand => _previousPageCommand;
 
     public ICommand OpenCreateUserCommand => _openCreateUserCommand;
+
+    public ICommand OpenStaffWarehouseAssignmentCommand => _openStaffWarehouseAssignmentCommand;
 
     public ICommand SaveRolesCommand => _saveRolesCommand;
 
@@ -302,6 +307,16 @@ public class AdminUserManagementViewModel : ObservableObject
         }
     }
 
+    private async Task OpenStaffWarehouseAssignmentAsync()
+    {
+        if (!EnsureAdminSessionForAction())
+        {
+            return;
+        }
+
+        await _userDialogService.ShowStaffWarehouseAssignmentDialogAsync(CancellationToken.None);
+    }
+
     private async Task SaveRolesAsync()
     {
         if (!EnsureAdminSessionForAction())
@@ -320,12 +335,18 @@ public class AdminUserManagementViewModel : ObservableObject
         OperationResult result = await _userManagementService.SetUserRolesAsync(
             targetUserId: targetUserId,
             roleIds: RoleSelections.Where(role => role.IsSelected).Select(role => role.RoleId).ToArray(),
+            expectedUserRowVersion: SelectedUser.RowVersion,
             actorUserId: _currentUserContext.UserId.Value,
             ct: CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -358,12 +379,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         ResetPasswordResult result = await _userManagementService.ResetPasswordAsync(
             SelectedUser.UserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, SelectedUser.UserId))
             {
                 return;
             }
@@ -376,6 +403,7 @@ public class AdminUserManagementViewModel : ObservableObject
             SelectedUser.Username,
             result.GeneratedPassword ?? string.Empty,
             "Password Reset");
+        await LoadUsersAsync(CurrentPage, SelectedUser.UserId);
     }
 
     private async Task DeactivateUserAsync()
@@ -400,12 +428,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         OperationResult result = await _userManagementService.DeactivateUserAsync(
             targetUserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -434,12 +468,18 @@ public class AdminUserManagementViewModel : ObservableObject
 
         OperationResult result = await _userManagementService.ReactivateUserAsync(
             targetUserId,
+            SelectedUser.RowVersion,
             _currentUserContext.UserId.Value,
             CancellationToken.None);
 
         if (!result.IsSuccess)
         {
             if (HandleAccessOrSessionFailure(result.ErrorMessage))
+            {
+                return;
+            }
+
+            if (await HandleConcurrencyConflictAsync(result.ErrorMessage, targetUserId))
             {
                 return;
             }
@@ -559,6 +599,24 @@ public class AdminUserManagementViewModel : ObservableObject
         return false;
     }
 
+    private async Task<bool> HandleConcurrencyConflictAsync(string? errorMessage, int preferredUserId)
+    {
+        if (!IsConcurrencyConflict(errorMessage))
+        {
+            return false;
+        }
+
+        _messageService.ShowError(errorMessage ?? "Concurrency conflict. Please refresh and retry.");
+        await LoadUsersAsync(CurrentPage, preferredUserId);
+        return true;
+    }
+
+    private static bool IsConcurrencyConflict(string? errorMessage)
+    {
+        return !string.IsNullOrWhiteSpace(errorMessage) &&
+               errorMessage.Contains(ConcurrencyConflictPrefix, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void TriggerLogout()
     {
         _authService.Logout();
@@ -571,6 +629,7 @@ public class AdminUserManagementViewModel : ObservableObject
         _nextPageCommand.RaiseCanExecuteChanged();
         _previousPageCommand.RaiseCanExecuteChanged();
         _openCreateUserCommand.RaiseCanExecuteChanged();
+        _openStaffWarehouseAssignmentCommand.RaiseCanExecuteChanged();
         _saveRolesCommand.RaiseCanExecuteChanged();
         _resetPasswordCommand.RaiseCanExecuteChanged();
         _deactivateUserCommand.RaiseCanExecuteChanged();

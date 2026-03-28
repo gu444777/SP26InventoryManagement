@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Windows.Input;
+using System.Windows.Data;
 using SP26InventoryManagement.DTOs;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Services;
@@ -32,6 +34,7 @@ public class IssueManagementViewModel : ObservableObject
     private string _statusMessage = string.Empty;
     private string _previewStatusMessage = string.Empty;
     private string _addQtyInput = string.Empty;
+    private string _productSearchText = string.Empty;
     private string _addUnitPriceInput = string.Empty;
     private string _referenceNo = string.Empty;
     private string _remarks = string.Empty;
@@ -46,6 +49,7 @@ public class IssueManagementViewModel : ObservableObject
     private ProductLookupDto? _selectedProductToAdd;
     private IssueRequestLineItem? _selectedRequestLine;
     private DraftIssueHeaderDto? _selectedDraftIssue;
+    private readonly ICollectionView _filteredProductsView;
 
     public IssueManagementViewModel(
         IIssueService issueService,
@@ -61,6 +65,8 @@ public class IssueManagementViewModel : ObservableObject
         Warehouses = [];
         Customers = [];
         Products = [];
+        _filteredProductsView = CollectionViewSource.GetDefaultView(Products);
+        _filteredProductsView.Filter = FilterProduct;
         RequestLines = [];
         PreviewAllocations = [];
         DraftIssues = [];
@@ -83,6 +89,8 @@ public class IssueManagementViewModel : ObservableObject
     public ObservableCollection<CustomerLookupDto> Customers { get; }
 
     public ObservableCollection<ProductLookupDto> Products { get; }
+
+    public ICollectionView FilteredProductsView => _filteredProductsView;
 
     public ObservableCollection<IssueRequestLineItem> RequestLines { get; }
 
@@ -156,6 +164,19 @@ public class IssueManagementViewModel : ObservableObject
     {
         get => _addQtyInput;
         set => SetInputAndRefresh(ref _addQtyInput, value);
+    }
+
+    public string ProductSearchText
+    {
+        get => _productSearchText;
+        set
+        {
+            string normalized = value?.Trim() ?? string.Empty;
+            if (SetProperty(ref _productSearchText, normalized))
+            {
+                RefreshProductFilter();
+            }
+        }
     }
 
     public string AddUnitPriceInput
@@ -273,7 +294,7 @@ public class IssueManagementViewModel : ObservableObject
         try
         {
             IReadOnlyList<WarehouseLookupDto> warehouses = await ExecuteIssueServiceCallAsync(
-                () => _issueService.GetActiveWarehousesAsync(ct));
+                () => _issueService.GetActiveWarehousesAsync(_currentUserContext.UserId!.Value, ct));
             IReadOnlyList<CustomerLookupDto> customers = await ExecuteIssueServiceCallAsync(
                 () => _issueService.GetActiveCustomersAsync(ct));
             IReadOnlyList<ProductLookupDto> products = await ExecuteIssueServiceCallAsync(
@@ -291,15 +312,21 @@ public class IssueManagementViewModel : ObservableObject
                 Customers.Add(customer);
             }
 
+            int? selectedProductId = SelectedProductToAdd?.ProductId;
             Products.Clear();
             foreach (ProductLookupDto product in products)
             {
                 Products.Add(product);
             }
+            RefreshProductFilter();
 
             SelectedWarehouse ??= Warehouses.FirstOrDefault();
             SelectedCustomer ??= Customers.FirstOrDefault();
-            SelectedProductToAdd = Products.FirstOrDefault();
+            SelectedProductToAdd = selectedProductId.HasValue
+                ? FilteredProductsView.Cast<ProductLookupDto>()
+                    .FirstOrDefault(product => product.ProductId == selectedProductId.Value)
+                : null;
+            SelectedProductToAdd ??= FilteredProductsView.Cast<ProductLookupDto>().FirstOrDefault();
             TransactionDate = DateTime.Today;
             await RefreshSelectedProductAvailableQtyAsync();
 
@@ -388,6 +415,7 @@ public class IssueManagementViewModel : ObservableObject
         RequestLines.Clear();
         SelectedRequestLine = null;
         AddQtyInput = string.Empty;
+        ProductSearchText = string.Empty;
         AddUnitPriceInput = string.Empty;
         ReferenceNo = string.Empty;
         Remarks = string.Empty;
@@ -509,6 +537,7 @@ public class IssueManagementViewModel : ObservableObject
             SelectedRequestLine = null;
             ClearPreview();
             AddQtyInput = string.Empty;
+            ProductSearchText = string.Empty;
             AddUnitPriceInput = string.Empty;
 
             await RefreshDraftIssuesAsync(setBusyState: false);
@@ -545,7 +574,7 @@ public class IssueManagementViewModel : ObservableObject
         {
             long? selectedId = SelectedDraftIssue?.TransactionId;
             IReadOnlyList<DraftIssueHeaderDto> drafts = await ExecuteIssueServiceCallAsync(
-                () => _issueService.GetDraftIssuesAsync(CancellationToken.None));
+                () => _issueService.GetDraftIssuesAsync(_currentUserContext.UserId!.Value, CancellationToken.None));
             ReplaceCollection(DraftIssues, drafts);
 
             if (selectedId.HasValue)
@@ -718,6 +747,7 @@ public class IssueManagementViewModel : ObservableObject
             IReadOnlyList<DraftIssueLineDto> lines = await ExecuteIssueServiceCallAsync(
                 () => _issueService.GetDraftIssueLinesAsync(
                     transactionId,
+                    _currentUserContext.UserId!.Value,
                     CancellationToken.None));
 
             if (requestVersion != _draftIssueLineRequestVersion)
@@ -921,6 +951,35 @@ public class IssueManagementViewModel : ObservableObject
         return false;
     }
 
+    private void RefreshProductFilter()
+    {
+        _filteredProductsView.Refresh();
+
+        if (SelectedProductToAdd is not null && !ProductMatchesSearch(SelectedProductToAdd))
+        {
+            SelectedProductToAdd = null;
+            return;
+        }
+
+        _addLineCommand.RaiseCanExecuteChanged();
+    }
+
+    private bool FilterProduct(object item)
+    {
+        return item is ProductLookupDto product && ProductMatchesSearch(product);
+    }
+
+    private bool ProductMatchesSearch(ProductLookupDto product)
+    {
+        if (string.IsNullOrWhiteSpace(_productSearchText))
+        {
+            return true;
+        }
+
+        return product.Sku.Contains(_productSearchText, StringComparison.OrdinalIgnoreCase)
+            || product.ProductName.Contains(_productSearchText, StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ClearPreview()
     {
         PreviewAllocations.Clear();
@@ -974,6 +1033,7 @@ public class IssueManagementViewModel : ObservableObject
                     selectedWarehouse.WarehouseId,
                     selectedProduct.ProductId,
                     TransactionDate,
+                    _currentUserContext.UserId!.Value,
                     CancellationToken.None));
 
             if (requestVersion != _availableQtyRequestVersion)

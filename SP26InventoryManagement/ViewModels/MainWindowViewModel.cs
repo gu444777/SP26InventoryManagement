@@ -32,8 +32,6 @@ public class MainWindowViewModel : ObservableObject
     private readonly AsyncRelayCommand _openManageCategoriesCommand;
     private readonly AsyncRelayCommand _openAdjustmentCommand; // 1. KHAI BÁO BIẾN CHO ADJUSTMENT
     private readonly IServiceProvider _serviceProvider;
-    private readonly AsyncRelayCommand _openChangePasswordCommand;
-    private readonly AsyncRelayCommand _logoutCommand;
     private readonly RelayCommand _openManageCustomersCommand;
     private readonly RelayCommand _openManageSuppliersCommand;
 
@@ -53,8 +51,6 @@ public class MainWindowViewModel : ObservableObject
 
 
         // Khởi tạo các Commands
-        _openChangePasswordCommand = new AsyncRelayCommand(OpenChangePasswordAsync, CanOpenChangePassword);
-        _logoutCommand = new AsyncRelayCommand(LogoutAsync, CanLogout);
         _openWarehouseCommand = new AsyncRelayCommand(OpenWarehouseAsync);
         _openManageProductsCommand = new AsyncRelayCommand(OpenManageProductsAsync);
         _openManageCategoriesCommand = new AsyncRelayCommand(OpenManageCategoriesAsync);
@@ -111,8 +107,7 @@ public class MainWindowViewModel : ObservableObject
     public ICommand OpenManageCategoriesCommand => _openManageCategoriesCommand;
     public ICommand OpenAdjustmentCommand => _openAdjustmentCommand; // 4. BINDING CHO NÚT ADJUSTMENT
 
-    private bool CanOpenChangePassword() => _currentUserContext.IsAuthenticated && _currentUserContext.UserId.HasValue;
-    private bool CanLogout() => true;
+
     public ICommand OpenManageCustomersCommand => _openManageCustomersCommand;
 
     public ICommand OpenManageSuppliersCommand => _openManageSuppliersCommand;
@@ -219,7 +214,7 @@ public class MainWindowViewModel : ObservableObject
         }
         return Task.CompletedTask;
     }
-}
+
     private void OpenManageCustomers()
     {
         CustomerView window = _serviceProvider.GetRequiredService<CustomerView>();

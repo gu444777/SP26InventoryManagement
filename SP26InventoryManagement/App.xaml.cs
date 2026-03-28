@@ -23,7 +23,7 @@ namespace SP26InventoryManagement
             Services = ConfigureServices();
 
             // 🔥 TEST MODE (đơn giản nhất)
-           // var window = Services.GetRequiredService<SupplierView>();
+            // var window = Services.GetRequiredService<SupplierView>();
             //MainWindow = window;
             //ShutdownMode = ShutdownMode.OnMainWindowClose;
             //window.Show();
@@ -132,7 +132,7 @@ namespace SP26InventoryManagement
             services.AddTransient<ChangePasswordWindow>();
             services.AddTransient<ISupplierService, SupplierService>();
             services.AddTransient<ICustomerService, CustomerService>();
-          
+
             services.AddTransient<SupplierViewModel>();
             services.AddTransient<CustomerViewModel>();
 

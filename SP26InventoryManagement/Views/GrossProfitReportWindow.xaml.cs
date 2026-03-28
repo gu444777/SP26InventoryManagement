@@ -5,13 +5,13 @@ using SP26InventoryManagement.ViewModels;
 
 namespace SP26InventoryManagement;
 
-public partial class ReceiptStaffWindow : Window
+public partial class GrossProfitReportWindow : Window
 {
     private readonly CurrentUserContext _currentUserContext;
     private readonly DispatcherTimer _sessionMonitorTimer;
     private bool _isNavigatingToLogin;
 
-    public ReceiptStaffWindow(ReceiptManagementViewModel viewModel, CurrentUserContext currentUserContext)
+    public GrossProfitReportWindow(GrossProfitReportViewModel viewModel, CurrentUserContext currentUserContext)
     {
         InitializeComponent();
         ViewModel = viewModel;
@@ -29,22 +29,11 @@ public partial class ReceiptStaffWindow : Window
         ViewModel.LogoutRequested += OnLogoutRequested;
     }
 
-    public ReceiptManagementViewModel ViewModel { get; }
+    public GrossProfitReportViewModel ViewModel { get; }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         Loaded -= OnLoaded;
-
-        if (!ViewModel.HasCreateReceiptPermission)
-        {
-            MessageBox.Show(
-                "Only WAREHOUSE_STAFF can open this screen.",
-                "Access Denied",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            Close();
-            return;
-        }
 
         try
         {
@@ -54,7 +43,7 @@ public partial class ReceiptStaffWindow : Window
         catch (Exception ex)
         {
             MessageBox.Show(
-                $"Failed to initialize Receipt Staff screen.\n\n{ex.Message}",
+                $"Failed to initialize Gross Profit Report screen.\n\n{ex.Message}",
                 "Initialization Error",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);

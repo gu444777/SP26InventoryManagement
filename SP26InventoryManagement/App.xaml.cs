@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.Models;
 using SP26InventoryManagement.Repositories;
+using SP26InventoryManagement.Repositories.Interfaces;
 using SP26InventoryManagement.Services;
 using SP26InventoryManagement.Services.Interfaces;
 using SP26InventoryManagement.ViewModels;
@@ -139,6 +140,21 @@ namespace SP26InventoryManagement
             services.AddTransient<SupplierViewModel>();
             services.AddTransient<CustomerViewModel>();
 
+            //an
+            services.AddTransient<WarehouseService>();
+            services.AddTransient<ProductService>();
+            services.AddTransient<IAdjustmentRepository, AdjustmentRepository>();
+            services.AddTransient<IWarehouseRepository, WarehouseRepository>();
+            services.AddTransient<IProductRepository, ProductRepository>();
+            services.AddTransient<ICategoryRepository, CategoryRepository>();
+            services.AddTransient<WarehouseViewModel>();
+            services.AddTransient<ProductViewModel>();
+            services.AddTransient<CategoryViewModel>();
+            services.AddTransient<AdjustmentViewModel>();
+            services.AddTransient<WarehouseView>();
+            services.AddTransient<ProductView>();
+            services.AddTransient<CategoryView>();
+            services.AddTransient<AdjustmentView>();
 
             //tesss
             services.AddTransient<SupplierView>();

@@ -1,6 +1,5 @@
 ﻿using SP26InventoryManagement.Infrastructure;
 using SP26InventoryManagement.ViewModels;
-using System;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Extensions.DependencyInjection;
@@ -161,20 +160,20 @@ namespace SP26InventoryManagement
         }
 
         private void OpenTransferButton_OnClick(object sender, RoutedEventArgs e)
-{
+        {
             if (!_currentUserContext.IsAuthenticated)
             {
                 NavigateToLogin();
                 return;
             }
-bool canOpenTransferWindow =
-                _currentUserContext.IsInRole(StaffRoleCode) ||
-                _currentUserContext.IsInRole(AdminRoleCode);
+            bool canOpenTransferWindow =
+                            _currentUserContext.IsInRole(StaffRoleCode) ||
+                            _currentUserContext.IsInRole(AdminRoleCode);
             if (!canOpenTransferWindow)
             {
                 MessageBox.Show(
                     "Only WAREHOUSE_STAFF or ADMIN can open Transfer screen.",
-"Access Denied",
+                    "Access Denied",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 return;
@@ -184,8 +183,8 @@ bool canOpenTransferWindow =
             {
                 return;
             }
-var window = app.Services.GetRequiredService<TransferWindow>();
-window.Owner = this;
+            var window = app.Services.GetRequiredService<TransferWindow>();
+            window.Owner = this;
             window.Show();
             window.Activate();
         }
